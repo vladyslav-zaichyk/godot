@@ -23,7 +23,11 @@ INPUTS = ("BufferRdLab.csproj", "project.godot", "Main.tscn", "BufferRdContract.
 CASES = {"initial-compute": 2, "same-rid-producer-update": 2,
          "oracle-negative-control": 2, "oob-length-and-uint-max": 2,
          "one-consumer-detached": 1, "replacement-and-original-independent": 2,
-         "replacement-shared-consumers": 2}
+         "replacement-shared-consumers": 2, "binding-guards-preserve-a": 2}
+INVALID_BIND = "Read-only buffer shader parameters require a live, attached BufferRD resource."
+THREAD_BIND = "BufferRD shader parameter assignments require the render thread."
+GUARDS = {"bare-rid": INVALID_BIND, "empty-wrapper": INVALID_BIND,
+          "freed-before-first-bind": INVALID_BIND, "worker-thread-binding": THREAD_BIND}
 DIAGNOSTIC = re.compile(r"\b(?:ERROR:|SCRIPT ERROR:|FATAL(?: ERROR)?[: ]|Unhandled exception)|"
                         r"WARNING:.*(?:leak|RID.*(?:allocated|still|remain)|orphan)", re.I)
 
@@ -45,9 +49,10 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
                 "errors": 0, "cycles": 32, "warmup_cycles": 8, "completed_cycles": 40,
                 "engine_hash": engine_hash, "sdk_version": sdk_version,
                 "driver": "vulkan", "renderer": "forward_plus",
-                "attach_ok_calls": 120, "wrapper_creations": 80, "wrapper_disposals": 80,
-                "compute_dispatches": 120, "numeric_viewport_audits": 520,
-                "numeric_pixel_samples": 1560, "viewport_image_readbacks": 520,
+                "attach_ok_calls": 121, "wrapper_creations": 82, "wrapper_disposals": 82,
+                "compute_dispatches": 120, "numeric_viewport_audits": 522,
+                "numeric_pixel_samples": 1566, "viewport_image_readbacks": 522,
+                "total_native_error_callbacks": 4,
                 "final_owned_gpu_buffer_count": 0, "final_owned_rd_resource_count": 0,
                 "final_wrapper_count": 0, "final_material_count": 0,
                 "final_owned_requested_gpu_buffer_bytes": 0, "leak_growth_tolerance_bytes": 0,
@@ -58,6 +63,26 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
               for key, value in expected.items() if record.get(key) != value]
     if record.get("failure"):
         errors.append(record["failure"])
+    callbacks = record.get("expected_native_error_callbacks", [])
+    if len(callbacks) != 4 or {item.get("test") for item in callbacks} != set(GUARDS):
+        errors.append("Incomplete exact expected native guard callback ledger.")
+    for item in callbacks:
+        file = item.get("file", "").replace("\\", "/")
+        if (item.get("rationale") != GUARDS.get(item.get("test")) or item.get("error_type") != 0
+                or item.get("function") not in {"set_shader_parameter", "ShaderMaterial::set_shader_parameter"}
+                or not (file == "scene/resources/material.cpp" or file.endswith("/scene/resources/material.cpp"))
+                or not isinstance(item.get("line"), int) or item["line"] <= 0 or not item.get("code")):
+            errors.append("Expected guard callback has an incompatible function/file/rationale.")
+    binding_guards = record.get("material_binding_guard_audits", [])
+    if len(binding_guards) != 4 or {item.get("test") for item in binding_guards} != set(GUARDS):
+        errors.append("Incomplete material binding preservation ledger.")
+    for item in binding_guards:
+        if item.get("cached_previous_wrapper_preserved") is not True or item.get("unexpected_error_delta") != 0:
+            errors.append("A material guard changed its previous cached wrapper or emitted an unexpected error.")
+        if item.get("test") == "freed-before-first-bind" and (item.get("backing_freed_before_first_material_bind") is not True
+                or not isinstance(item.get("retired_storage_rid"), int) or item["retired_storage_rid"] <= 0
+                or item["retired_storage_rid"] == item.get("previous_storage_rid")):
+            errors.append("The stale-wrapper probe lacks a distinct, freed backing RID.")
     negatives = record.get("negative_audits", [])
     names = {"invalid-rid", "freed-rid", "uniform-buffer", "undersized-storage",
              "non-record-aligned-storage", "different-valid-storage",
@@ -72,6 +97,11 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
     identities = record.get("borrowed_identity_audits", [])
     if len(identities) != 120:
         errors.append("Incomplete borrowed RID identity ledger.")
+    original = next((item for item in identities if item.get("cycle") == 8 and item.get("test") == "initial"), {})
+    for item in binding_guards:
+        if (item.get("previous_wrapper_resource_id") != original.get("wrapper_resource_id")
+                or item.get("previous_storage_rid") != original.get("caller_storage_rid")):
+            errors.append("Material guard preservation does not refer to first-settled-cycle wrapper A.")
     for cycle in range(40):
         rows = [item for item in identities if item.get("cycle") == cycle]
         by_name = {item.get("test"): item for item in rows}
@@ -91,7 +121,7 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
     if len(cycles) != 40 or [item.get("cycle") for item in cycles] != list(range(40)):
         errors.append("Incomplete ordered lifecycle ledger.")
     for item in cycles:
-        if (item.get("raster_audits") != 13 or item.get("final_owned_buffers") != 0
+        if (item.get("raster_audits") != (15 if item.get("cycle") == 8 else 13) or item.get("final_owned_buffers") != 0
                 or item.get("final_wrappers") != 0 or item.get("final_materials") != 0
                 or item.get("warmup") != (item.get("cycle", 40) < 8)):
             errors.append("A lifecycle row is incomplete or retained resources.")
@@ -113,10 +143,57 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
     if errors:
         raise ValueError("\n".join(errors))
     return {"passed": True, "warmup_cycles": 8, "settled_cycles": 32,
-            "numeric_viewport_audits": 520, "negative_attach_cases": 8,
+            "numeric_viewport_audits": 522, "negative_attach_cases": 8, "material_binding_guard_cases": 4,
             "final_owned_resources": 0,
             "memory_scope": "Logical RD bytes and native ObjectDB object plateau; not physical VRAM residency.",
             "performance_qualified": False}
+
+
+def inspect_shutdown(console: str, callbacks: list[dict]) -> dict:
+    """Permit exactly one scoped native error/location pair for each raw callback.
+
+    Identical diagnostics outside the explicit guard markers remain failures,
+    including errors after contract.json or during process shutdown.
+    """
+    failures: list[dict] = []
+    expected_lines: list[dict] = []
+    by_name = {item.get("test"): item for item in callbacks}
+    if len(callbacks) != 4 or set(by_name) != set(GUARDS):
+        failures.append({"line": 0, "text": "Expected callback ledger is missing or duplicated."})
+    active = None
+    seen: set[str] = set()
+    error_count = location_count = 0
+    for number, line in enumerate(console.splitlines(), 1):
+        if line.startswith("BUFFER_RD_EXPECTED_GUARD_BEGIN="):
+            name = line.split("=", 1)[1]
+            if active is not None or name not in by_name or name in seen:
+                failures.append({"line": number, "text": "Invalid expected-error begin marker: " + line})
+            active = name
+            error_count = location_count = 0
+            continue
+        if line.startswith("BUFFER_RD_EXPECTED_GUARD_END="):
+            name = line.split("=", 1)[1]
+            if name != active or error_count != 1 or location_count != 1:
+                failures.append({"line": number, "text": "Guard requires exactly one matching error and native source location: " + name})
+            seen.add(name)
+            active = None
+            continue
+        callback = by_name.get(active, {})
+        if callback:
+            location = f"at: {callback.get('function')} ({callback.get('file')}:{callback.get('line')})"
+            if line.strip() == location:
+                location_count += 1
+        if DIAGNOSTIC.search(line):
+            if (callback and callback.get("rationale") == GUARDS.get(active)
+                    and line == "ERROR: " + callback["rationale"] and error_count == 0):
+                error_count += 1
+                expected_lines.append({"line": number, "test": active, "text": line})
+            else:
+                failures.append({"line": number, "text": line})
+    if active is not None or seen != set(GUARDS) or len(expected_lines) != 4:
+        failures.append({"line": 0, "text": "Incomplete bounded expected native error scopes."})
+    return {"passed": not failures, "expected_native_error_count": len(expected_lines),
+            "expected_diagnostics": expected_lines, "diagnostics": failures}
 
 
 def execute(command: list[str], cwd: Path, env: dict[str, str], output: Path, label: str, timeout: int) -> int:
@@ -220,13 +297,14 @@ def main() -> int:
                    "--", "--record=" + str(record), "--expected-engine-hash=" + args.engine_hash,
                    "--expected-sdk-version=" + args.sdk_version]
         code = execute(command, PROJECT, env, output, "runtime", args.timeout)
-        diagnostics = [{"line": number, "text": line} for number, line in enumerate(
-            (output / "runtime.log").read_text(encoding="utf-8", errors="replace").splitlines(), 1) if DIAGNOSTIC.search(line)]
-        dump(output / "shutdown.json", {"passed": not diagnostics and code == 0, "exit_code": code,
-             "console_sha256": sha(output / "runtime.log"), "diagnostics": diagnostics})
-        if code or diagnostics:
+        raw = json.loads(record.read_bytes()) if record.is_file() else {}
+        shutdown = inspect_shutdown((output / "runtime.log").read_text(encoding="utf-8", errors="replace"),
+                                    raw.get("expected_native_error_callbacks", []))
+        shutdown.update(passed=shutdown["passed"] and code == 0, exit_code=code,
+                        console_sha256=sha(output / "runtime.log"))
+        dump(output / "shutdown.json", shutdown)
+        if code or not shutdown["passed"]:
             raise ValueError("Runtime/shutdown gate failed; exact diagnostics are in shutdown.json.")
-        raw = json.loads(record.read_bytes())
         summary = validate(raw, args.engine_hash, args.sdk_version)
         if raw["managed_api_assembly_sha256"] != api_before:
             raise ValueError("Runtime loaded a GodotSharp assembly from another bundle.")

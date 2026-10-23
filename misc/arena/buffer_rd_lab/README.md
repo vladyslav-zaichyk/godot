@@ -32,7 +32,9 @@ The coordinator runs one fixture build/contract at a time per checkout.
 ## Proof and limits
 
 Each of eight warmup and 32 settled cycles performs thirteen numeric viewport
-audits. A compute shader writes four records. Vertex and fragment consumers
+audits. The first settled cycle adds one two-consumer phase after four rejected
+material assignments, for 522 numeric viewport audits total. A compute shader
+writes four records. Vertex and fragment consumers
 check exact words, float reinterpretation and length. RGB output contains only
 zero/one endpoints; three interior pixels are inspected through `GetImage`
 bytes. Nothing saves an image or performs a screenshot/visual test. A deliberate
@@ -45,8 +47,21 @@ UINT_MAX out-of-range loads must return zero.
 Eight attach rejections cover invalid/freed RIDs, a uniform buffer, undersized
 and non-record-aligned storage, another valid buffer, local-device storage and
 an actual worker-thread call. Every rejection must return its exact Error,
-preserve both getters and emit no native error. Negative shader compiler and
-invalid material-parameter tests belong to the separate engine tests.
+preserve both getters and emit no native error. Four additional ShaderMaterial
+guards reject a bare RID, an empty wrapper, a wrapper whose backing buffer was
+freed before its first material binding, and a worker-thread assignment. The previous cached wrapper
+must remain A after every rejection; without any successful rebind, both GPU
+consumers must then still read A correctly.
+
+Those four material setters intentionally emit four native errors. The logger
+accepts exactly one callback per bounded case, with the expected rationale,
+ShaderMaterial setter function and `scene/resources/material.cpp` location.
+It retains every expected callback. All other errors remain fatal; no global
+logging is suppressed. Flushed stdout markers let the runner permit only the
+four exact ERROR lines with matching callback source locations inside their
+scopes. Identical errors outside those scopes, additional errors, or shutdown
+leaks are rejected. `errors=0` means zero unexpected errors, not zero total
+native callbacks. Negative shader compiler tests remain separate engine tests.
 
 All material references detach before a deferred frame drain and synchronous
 caller-buffer completion readbacks. Wrapper disposal must leave caller storage

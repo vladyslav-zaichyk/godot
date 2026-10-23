@@ -17,7 +17,7 @@ public partial class BufferRdContract : Node
     readonly List<(Rid rid, string kind, uint bytes)> _owned = new();
     readonly List<BufferRD> _wrappers = new();
     readonly List<ShaderMaterial> _materials = new();
-    readonly List<object> _negativeAudits = new(), _pixelAudits = new(), _cycles = new(), _identityAudits = new();
+    readonly List<object> _negativeAudits = new(), _pixelAudits = new(), _cycles = new(), _identityAudits = new(), _bindingGuardAudits = new();
     readonly List<ulong> _settledBytes = new();
     readonly List<long> _settledResources = new();
     readonly ContractErrorLogger _errors = new();
@@ -70,7 +70,7 @@ public partial class BufferRdContract : Node
                     resources = checked((long)Performance.GetMonitor(Performance.Monitor.ObjectCount));
                 });
                 Check(_wrappers.Count == 0 && _materials.Count == 0 && OwnedBuffers == 0, "A cycle retained owned consumers or buffers.");
-                Check(_rasterAudits - firstRaster == 13, "A cycle did not execute all thirteen numeric viewport audits.");
+                Check(_rasterAudits - firstRaster == (_currentCycle == WarmupCycles ? 15 : 13), "A cycle did not execute its fixed numeric viewport audits.");
                 _cycles.Add(new { cycle = _currentCycle, warmup = _currentCycle < WarmupCycles,
                     checks = _checks - firstCheck, raster_audits = _rasterAudits - firstRaster,
                     rd_logical_buffer_bytes = bytes, native_object_count = resources,
@@ -81,8 +81,10 @@ public partial class BufferRdContract : Node
             Check(_settledBytes.Count == SettledCycles && _settledResources.Count == SettledCycles, "Incomplete settled samples.");
             Check(_settledBytes.Skip(SettledCycles / 2).Distinct().Count() == 1, "Logical RD buffer bytes did not reach an exact latter-half plateau.");
             Check(_settledResources.Skip(SettledCycles / 2).Distinct().Count() == 1, "Native objects did not reach an exact latter-half plateau.");
-            Check(_wrapperCreates == _wrapperDisposes && _attachCalls == 3 * (WarmupCycles + SettledCycles), "Wrapper lifecycle conservation failed.");
+            Check(_wrapperCreates == _wrapperDisposes && _attachCalls == 3 * (WarmupCycles + SettledCycles) + 1, "Wrapper lifecycle conservation failed.");
             Check(_negativeAudits.Count == 8, "Incomplete rejection audit.");
+            Check(_bindingGuardAudits.Count == 4 && _errors.ExpectedCallbacks.Length == 4 && _errors.TotalErrors == 4,
+                "Incomplete exact ShaderMaterial guard callback ledger.");
         } catch (Exception exception) {
             _failure = exception.ToString();
             GD.PushError(_failure);
@@ -289,6 +291,7 @@ public partial class BufferRdContract : Node
         await Bind(0, _wrapperA, updatedA, 0); await Bind(1, _wrapperA, updatedA, 3);
         Identity("producer-update", _wrapperA, _a);
         await Numeric("same-rid-producer-update", new[] { 0, 1 }, new byte[] { 255, 255, 255 });
+        if (cycle == WarmupCycles) await BindingGuardCases(_wrapperA, _a);
         // This deliberately wrong oracle must fail in pixels. A missing mesh or
         // a default/fallback white material therefore cannot pass the fixture.
         await Bind(0, _wrapperA, updatedA + 1, 0); await Bind(1, _wrapperA, updatedA + 1, 3);
@@ -324,6 +327,59 @@ public partial class BufferRdContract : Node
             uint[] expected = { seed + i * 17, seed ^ (i * 11 + 3),
                 BitConverter.SingleToUInt32Bits((seed + i) * 0.125f), 0x12340000u + i };
             Check(actual.AsSpan((int)i * 4, 4).SequenceEqual(expected), "Compute producer bytes disagree with the independent CPU oracle.");
+        }
+    }
+
+    async Task BindingGuardCases(BufferRD original, Rid storage)
+    {
+        const string invalidMessage = "Read-only buffer shader parameters require a live, attached BufferRD resource.";
+        const string threadMessage = "BufferRD shader parameter assignments require the render thread.";
+        ShaderMaterial material = _consumers[0] ?? throw new Exception("Missing guard consumer.");
+        BufferRD empty = NewWrapper(), stale = NewWrapper();
+        Rid retired = default;
+        try {
+            await OnRender(() => {
+                retired = Own(_rd.StorageBufferCreate(16), "storage_buffer", 16);
+                Attach(stale, retired);
+                FreeOwned(retired); // Stale wrapper has never been bound to a material.
+            });
+            async Task Reject(string name, Variant parameter, string rationale, bool worker = false)
+            {
+                int before = _errors.Errors;
+                _errors.BeginExpected(name, rationale);
+                GD.Print("BUFFER_RD_EXPECTED_GUARD_BEGIN=" + name);
+                try {
+                    if (worker) await Task.Run(() => material.SetShaderParameter("data", parameter));
+                    else await OnRender(() => material.SetShaderParameter("data", parameter));
+                } finally {
+                    bool exactlyOne = _errors.EndExpected(name);
+                    GD.Print("BUFFER_RD_EXPECTED_GUARD_END=" + name);
+                    Check(exactlyOne, name + " did not emit exactly one matching native guard callback.");
+                }
+                bool preserved = false;
+                await OnRender(() => {
+                    using Variant cached = material.GetShaderParameter("data");
+                    preserved = cached.AsGodotObject() == original && original.GetRid() == storage && original.GetBufferRdRid() == storage;
+                });
+                Check(preserved && before == _errors.Errors, name + " changed the previous wrapper or emitted an unexpected error.");
+                _bindingGuardAudits.Add(new { test = name, cached_previous_wrapper_preserved = preserved,
+                    previous_wrapper_resource_id = original.GetInstanceId(), previous_storage_rid = storage.Id,
+                    retired_storage_rid = name == "freed-before-first-bind" ? retired.Id : 0UL,
+                    backing_freed_before_first_material_bind = name == "freed-before-first-bind",
+                    unexpected_error_delta = _errors.Errors - before });
+            }
+            using (Variant bare = Variant.From(storage)) await Reject("bare-rid", bare, invalidMessage);
+            using (Variant unattached = Variant.From(empty)) await Reject("empty-wrapper", unattached, invalidMessage);
+            using (Variant freed = Variant.From(stale)) await Reject("freed-before-first-bind", freed, invalidMessage);
+            using (Variant valid = Variant.From(original)) await Reject("worker-thread-binding", valid, threadMessage, true);
+            // No successful rebind occurs between the four rejected mutations
+            // and this extra phase: both spatial consumers must still read A.
+            await Numeric("binding-guards-preserve-a", new[] { 0, 1 }, new byte[] { 255, 255, 255 });
+        } finally {
+            await OnRender(() => {
+                DisposeWrapper(stale); DisposeWrapper(empty);
+                if (_owned.Any(item => item.rid == retired)) FreeOwned(retired);
+            });
         }
     }
 
@@ -409,6 +465,8 @@ public partial class BufferRdContract : Node
         string managedApi = typeof(Node).Assembly.Location;
         var result = new {
             contract = "buffer-rd-numeric-contract-v1", passed, failure = _failure, errors = _errors.Errors,
+            total_native_error_callbacks = _errors.TotalErrors, expected_native_error_callbacks = _errors.ExpectedCallbacks,
+            material_binding_guard_audits = _bindingGuardAudits,
             cycles = SettledCycles, warmup_cycles = WarmupCycles, completed_cycles = _completedCycles,
             engine = Engine.GetVersionInfo()["string"].AsString(), engine_hash = Engine.GetVersionInfo()["hash"].AsString(),
             sdk_version = SdkVersion, managed_fixture_assembly_sha256 = Hash(assembly), managed_api_assembly_sha256 = Hash(managedApi),
