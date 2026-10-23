@@ -205,3 +205,41 @@ compatible retained control. Rebuild the control only for a concrete mismatch
 or attribution question; a paired CI rebuild is not a mandatory step. GPU runs
 wait until the renderer's current A/B is complete. Source calculations alone
 select a narrower experiment, not integration or performance acceptance.
+
+## Procedural contract fixture
+
+`project/` and `run_contract.py` provide a small new-API consumer. It uses eight
+fresh MultiMesh views, eight draw slots per view, two stable poses and one
+indexed procedural quad. Compute writes IDs, poses and commands; every command
+uses nonzero `firstInstance = 3`. Three modes run in the **same new editor**:
+eight borrowed identity banks, one borrowed identity bank, and shader-driven
+views without native transform inputs. A pre-feature editor cannot run this
+fixture because its SDK and shader language lack the new API/capability.
+
+The future GPU contract requires 24 actual attaches, nine numerical viewport
+readbacks and 144 interior pixel samples. It checks ID reorder, pose/color
+updates, equal per-phase rasters across modes, zero capacity, unaligned/short
+command ranges, failed-rebind preservation, detach and destruction without
+freeing borrowed buffers. The vertex path reads MODEL_MATRIX so native transform
+semantics remain observable rather than unused shader inputs. Eighteen
+live-storage probes check caller ownership.
+No image files are written. Input allocation ledgers are 3072/384/0 transform
+bytes at this tiny scale, plus identical IDs/poses/commands. These ledgers are
+caller-owned requested input sizes, not measured resident VRAM or an audit of
+every hidden allocation. The raw RD logical allocation sample is contextual.
+
+The runner explicitly restores/builds and **starts the GPU**. Wait until the
+parallel renderer A/B releases the GPU before using it. Supply the candidate's
+exact executable, native commit and nuspec-derived SDK/feed; use a fresh output
+directory outside this fixture. All generated project files, logs and caches
+stay under that output. From this directory:
+
+```text
+python -B run_contract.py --engine EDITOR_EXE --sdk-feed LOCAL_FEED --sdk-version EXACT_SDK --engine-hash FULL_NATIVE_SHA --output FRESH_OUTPUT
+```
+
+Passing this small contract would establish only its listed numerical/API
+behavior. It supplies no performance window, physical-VRAM result, sustained
+lifetime plateau, invalid-material runtime guard proof, depth/shadow/TBN/motion
+proof, gameplay or network evidence. The source is provided separately from
+native compilation; compile-only packaging must never be labeled a GPU pass.

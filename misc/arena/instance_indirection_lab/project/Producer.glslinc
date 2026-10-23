@@ -1,0 +1,30 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(set = 0, binding = 0, std430) writeonly buffer Ids { uint data[]; } ids;
+layout(set = 0, binding = 1, std430) writeonly buffer Poses { uvec4 data[]; } poses;
+layout(set = 0, binding = 2, std430) writeonly buffer Commands { uint data[]; } commands;
+layout(push_constant, std430) uniform Parameters { uint phase; } parameters;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i < 64u) {
+        uint view = i / 8u;
+        ids.data[i] = (i % 8u == 3u) ? ((view & 1u) ^ (parameters.phase == 0u ? 0u : 1u)) : 0xffffffffu;
+    }
+    if (i < 2u) {
+        float x = i == 0u ? -0.5 : 0.5;
+        if (parameters.phase == 2u) { x = -x; }
+        poses.data[i * 4u] = floatBitsToUint(vec4(0.25, 0.0, 0.0, x));
+        poses.data[i * 4u + 1u] = floatBitsToUint(vec4(0.0, 0.25, 0.0, 0.0));
+        poses.data[i * 4u + 2u] = floatBitsToUint(vec4(0.0, 0.0, 1.0, 0.0));
+        uint color = parameters.phase == 2u ? (i == 0u ? 4u : 3u) : (i == 0u ? 1u : 2u);
+        poses.data[i * 4u + 3u] = uvec4(color, i, parameters.phase, 0u);
+    }
+    if (i < 8u) {
+        commands.data[i * 5u] = 6u;
+        commands.data[i * 5u + 1u] = 1u;
+        commands.data[i * 5u + 2u] = 0u;
+        commands.data[i * 5u + 3u] = 0u;
+        commands.data[i * 5u + 4u] = 3u;
+    }
+}
