@@ -34,7 +34,7 @@ public partial class BufferRdContract : Node
     BufferRD? _wrapperA, _wrapperB;
     int _checks, _attachCalls, _wrapperCreates, _wrapperDisposes, _bindings;
     int _dispatches, _imageReadbacks, _bufferReadbacks, _pixelSamples, _rasterAudits;
-    int _completedCycles, _currentCycle = -1;
+    int _completedCycles, _collectionBoundaries, _currentCycle = -1;
     string _failure = "";
 
     public override async void _Ready()
@@ -64,6 +64,11 @@ public partial class BufferRdContract : Node
                 int firstCheck = _checks, firstRaster = _rasterAudits;
                 await RunCycle(_currentCycle);
                 await CleanupCycle();
+                await DrainFrames();
+                // This is a lifetime screen, outside every performance window.
+                // Release temporary managed wrappers before sampling ObjectDB.
+                GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+                _collectionBoundaries++;
                 await DrainFrames();
                 ulong bytes = 0;
                 long resources = 0;
@@ -103,7 +108,17 @@ public partial class BufferRdContract : Node
                 _failure += "\nCleanup: " + exception;
                 GD.PushError(exception.ToString());
             }
-            WriteResult();
+            try { WriteResult(); }
+            catch (Exception exception) {
+                GD.PushError("Contract reporting failed: " + exception);
+                string path = Path.GetFullPath(Required("record"));
+                File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(new {
+                    contract = "buffer-rd-numeric-contract-v1", passed = false,
+                    failure = "Contract reporting failed: " + exception, completed_cycles = _completedCycles
+                }));
+                OS.RemoveLogger(_errors); _errors.Dispose();
+                GetTree().Quit(2);
+            }
         }
     }
 
@@ -491,6 +506,9 @@ public partial class BufferRdContract : Node
             sdk_version = SdkVersion,
             managed_fixture_assembly_sha256 = RuntimeAssemblyHash(typeof(BufferRdContract).Assembly, assembly),
             managed_api_assembly_sha256 = RuntimeAssemblyHash(typeof(Node).Assembly, managedApi),
+            managed_fixture_module_mvid = typeof(BufferRdContract).Assembly.ManifestModule.ModuleVersionId.ToString(),
+            managed_api_module_mvid = typeof(Node).Assembly.ManifestModule.ModuleVersionId.ToString(),
+            managed_identity_mode = "Disk SHA-256 correlated with runtime module MVID; not a hash of runtime memory.",
             driver = RenderingServer.GetCurrentRenderingDriverName(), renderer = RenderingServer.GetCurrentRenderingMethod(),
             gpu_name = RenderingServer.GetVideoAdapterName(), checks = _checks,
             attach_ok_calls = _attachCalls, wrapper_creations = _wrapperCreates, wrapper_disposals = _wrapperDisposes,
@@ -500,6 +518,7 @@ public partial class BufferRdContract : Node
             negative_audits = _negativeAudits, representative_numeric_audits = _pixelAudits, cycle_audits = _cycles,
             borrowed_identity_audits = _identityAudits,
             settled_rd_logical_buffer_bytes = _settledBytes, settled_native_object_counts = _settledResources,
+            managed_collection_boundaries = _collectionBoundaries,
             final_owned_gpu_buffer_count = OwnedBuffers, final_owned_rd_resource_count = _owned.Count,
             final_wrapper_count = _wrappers.Count, final_material_count = _materials.Count,
             final_owned_requested_gpu_buffer_bytes = _owned.Where(item => item.kind.Contains("buffer")).Sum(item => (long)item.bytes),

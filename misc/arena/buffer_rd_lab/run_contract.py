@@ -57,6 +57,7 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
                 "total_native_error_callbacks": 4,
                 "final_owned_gpu_buffer_count": 0, "final_owned_rd_resource_count": 0,
                 "final_wrapper_count": 0, "final_material_count": 0,
+                "managed_collection_boundaries": 40,
                 "final_owned_requested_gpu_buffer_bytes": 0, "leak_growth_tolerance_bytes": 0,
                 "latter_half_resource_growth_tolerance": 0,
                 "max_live_positive_storage_bytes": 128,
@@ -270,6 +271,7 @@ def main() -> int:
     user_config.write_bytes(config.read_bytes())
     env.update(ArenaGodotSdkVersion=args.sdk_version, RestoreConfigFile=str(config),
                DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1",
+               DOTNET_GENERATE_ASPNET_CERTIFICATE="false",
                DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE="1", DOTNET_CLI_USE_MSBUILD_SERVER="0",
                MSBUILDDISABLENODEREUSE="1", UseSharedCompilation="false")
     obj = (work / "obj").as_posix() + "/"

@@ -70,7 +70,8 @@ native callbacks. Negative shader compiler tests remain separate engine tests.
 All material references detach before a deferred frame drain and synchronous
 caller-buffer completion readbacks. Wrapper disposal must leave caller storage
 alive. Producer uniform sets and caller storage are then freed. Every cycle
-ends with zero owned buffers/wrappers/materials. The last sixteen settled global
+ends with zero owned buffers/wrappers/materials. Each boundary collects temporary
+.NET wrappers and drains deferred work before sampling. The last sixteen settled global
 logical-RD-byte and native ObjectDB object samples must plateau exactly. This is a
 bounded lifetime screen, not a physical/resident VRAM guarantee. No performance
 window, FPS claim, animation or gameplay qualification is included.
@@ -79,6 +80,8 @@ window, FPS claim, animation or gameplay qualification is included.
 `shutdown.json` scans the full runtime log including errors after JSON output;
 `acceptance.json` independently checks fixed counts, errors, identities and
 plateaus. Only a complete PASS qualifies this restricted API path.
+Stream-loaded assemblies are correlated with their disk files by module MVID
+before SHA-256 checks; this is not a cryptographic hash of runtime memory.
 
 ## Output ownership
 
