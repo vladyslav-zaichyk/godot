@@ -1445,7 +1445,7 @@ void RenderingDevice::buffer_flush(RID p_buffer) {
 	driver->buffer_flush(buffer->driver_id);
 }
 
-bool RenderingDevice::storage_buffer_is_valid(RID p_buffer, uint64_t p_minimum_size, bool p_require_indirect) const {
+bool RenderingDevice::storage_buffer_is_valid(RID p_buffer, uint64_t p_minimum_size, bool p_require_indirect) {
 	ERR_RENDER_THREAD_GUARD_V(false);
 	const Buffer *buffer = storage_buffer_owner.get_or_null(p_buffer);
 	return buffer && buffer->size >= p_minimum_size && buffer->usage.has_flag(RDD::BUFFER_USAGE_STORAGE_BIT) && (!p_require_indirect || buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT));
