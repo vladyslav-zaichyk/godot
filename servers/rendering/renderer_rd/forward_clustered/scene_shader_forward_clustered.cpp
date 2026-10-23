@@ -46,6 +46,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	ubo_size = 0;
 	uniforms.clear();
 	buffer_uniforms.clear();
+	shader_driven_instances = false;
 	_clear_vertex_input_mask_cache();
 
 	if (code.is_empty()) {
@@ -96,6 +97,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 
 	ShaderCompiler::IdentifierActions actions;
 	actions.allow_readonly_buffers = OS::get_singleton()->get_current_rendering_driver_name() == "vulkan";
+	actions.allow_shader_driven_instances = actions.allow_readonly_buffers;
 	actions.entry_point_stages["vertex"] = ShaderCompiler::STAGE_VERTEX;
 	actions.entry_point_stages["fragment"] = ShaderCompiler::STAGE_FRAGMENT;
 	actions.entry_point_stages["light"] = ShaderCompiler::STAGE_FRAGMENT;
@@ -124,6 +126,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	actions.render_mode_flags["wireframe"] = &wireframe;
 	actions.render_mode_flags["particle_trails"] = &uses_particle_trails;
 	actions.render_mode_flags["world_vertex_coords"] = &uses_world_coordinates;
+	actions.render_mode_flags["shader_driven_instances"] = &shader_driven_instances;
 
 	actions.usage_flag_pointers["ALPHA"] = &uses_alpha;
 	actions.usage_flag_pointers["ALPHA_SCISSOR_THRESHOLD"] = &uses_alpha_clip;

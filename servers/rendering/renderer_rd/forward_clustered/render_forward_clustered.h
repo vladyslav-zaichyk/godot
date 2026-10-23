@@ -567,6 +567,10 @@ private:
 		uint32_t gi_offset_cache = 0;
 		bool store_transform_cache = true;
 		RID transforms_uniform_set;
+		bool shader_driven_instances = false;
+		bool shader_driven_material_warning = false;
+		bool shader_driven_motion_warning = false;
+		bool shader_driven_mesh_warning = false;
 		uint32_t instance_count = 0;
 		uint32_t trail_steps = 1;
 		bool can_sdfgi = false;
