@@ -162,6 +162,7 @@
 #include "scene/resources/text_line.h"
 #include "scene/resources/text_paragraph.h"
 #include "scene/resources/texture.h"
+#include "scene/resources/buffer_rd.h"
 #include "scene/resources/texture_rd.h"
 #include "scene/resources/theme.h"
 #include "scene/resources/video_stream.h"
@@ -977,6 +978,7 @@ void register_scene_types() {
 #endif
 
 	// These classes are part of renderer_rd
+	GDREGISTER_CLASS(BufferRD);
 	GDREGISTER_CLASS(Texture2DRD);
 	GDREGISTER_ABSTRACT_CLASS(TextureLayeredRD);
 	GDREGISTER_CLASS(Texture2DArrayRD);

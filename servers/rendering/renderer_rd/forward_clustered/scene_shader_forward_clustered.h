@@ -224,6 +224,7 @@ public:
 		std::atomic<uint64_t> vertex_input_masks[VERTEX_INPUT_MASKS_SIZE] = {};
 
 		Vector<ShaderCompiler::GeneratedCode::Texture> texture_uniforms;
+		Vector<ShaderCompiler::GeneratedCode::Buffer> buffer_uniforms;
 
 		Vector<uint32_t> ubo_offsets;
 		uint32_t ubo_size = 0;

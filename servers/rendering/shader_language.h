@@ -91,6 +91,7 @@ public:
 		TK_TYPE_SAMPLERCUBE,
 		TK_TYPE_SAMPLERCUBEARRAY,
 		TK_TYPE_SAMPLEREXT,
+		TK_TYPE_READONLY_BUFFER,
 		TK_INTERPOLATION_FLAT,
 		TK_INTERPOLATION_SMOOTH,
 		TK_CONST,
@@ -242,6 +243,7 @@ public:
 		TYPE_SAMPLERCUBE,
 		TYPE_SAMPLERCUBEARRAY,
 		TYPE_SAMPLEREXT,
+		TYPE_READONLY_BUFFER,
 		TYPE_STRUCT,
 		TYPE_MAX
 	};
@@ -713,8 +715,11 @@ public:
 			String group;
 
 			_FORCE_INLINE_ bool is_texture() const {
-				// Order is assigned to -1 for texture uniforms.
-				return order < 0;
+				return ShaderLanguage::is_sampler_type(type);
+			}
+
+			_FORCE_INLINE_ bool is_buffer() const {
+				return type == TYPE_READONLY_BUFFER;
 			}
 
 			Uniform() {
@@ -1225,7 +1230,7 @@ private:
 	Node *_parse_array_constructor(BlockNode *p_block, const FunctionInfo &p_function_info, DataType p_type, const StringName &p_struct_name, int p_array_size);
 	ShaderLanguage::Node *_reduce_expression(BlockNode *p_block, ShaderLanguage::Node *p_node);
 
-	Node *_parse_and_reduce_expression(BlockNode *p_block, const FunctionInfo &p_function_info, const ExpressionInfo *p_previous_expression_info = nullptr);
+	Node *_parse_and_reduce_expression(BlockNode *p_block, const FunctionInfo &p_function_info, const ExpressionInfo *p_previous_expression_info = nullptr, bool p_allow_readonly_buffer = false);
 	Error _parse_block(BlockNode *p_block, const FunctionInfo &p_function_info, bool p_just_one = false, bool p_can_break = false, bool p_can_continue = false);
 	String _get_shader_type_list(const HashSet<String> &p_shader_types) const;
 	String _get_qualifier_str(ArgumentQualifier p_qualifier) const;

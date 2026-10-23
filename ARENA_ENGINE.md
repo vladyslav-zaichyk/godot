@@ -79,7 +79,9 @@ void vertex() {
 
 `BufferRD` is a borrowed, immutable wrapper after successful attachment.
 Compute may update its contents. To replace storage, bind a new wrapper to the
-material. Detach all consumers and wait for their rendering work before freeing
+material on the render thread; buffer assignments validate the live RID before
+changing the material cache or native binding. Serialize mutations of a material.
+Detach all consumers and wait for their rendering work before freeing
 the caller-owned RID. The wrapper never frees that RID. Attachments require the
 render thread and a global-RD storage allocation of at least 16 bytes, divisible
 by 16. This contract is development scope, not a claim that v1 is already built

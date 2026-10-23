@@ -114,6 +114,7 @@ static int _get_datatype_alignment(SL::DataType p_type) {
 			return 16;
 		case SL::TYPE_SAMPLEREXT:
 			return 16;
+		case SL::TYPE_READONLY_BUFFER:
 		case SL::TYPE_STRUCT:
 			return 0;
 		case SL::TYPE_MAX: {
@@ -522,6 +523,7 @@ String ShaderCompiler::_dump_node_code(const SL::Node *p_node, int p_level, Gene
 			}
 
 			int max_texture_uniforms = 0;
+			int texture_slot_count = 0;
 			int max_uniforms = 0;
 
 			for (const KeyValue<StringName, SL::ShaderNode::Uniform> &E : pnode->uniforms) {
@@ -536,7 +538,11 @@ String ShaderCompiler::_dump_node_code(const SL::Node *p_node, int p_level, Gene
 						continue; // Don't create uniforms in the generated code for these.
 					}
 					max_texture_uniforms++;
+					texture_slot_count = MAX(texture_slot_count, E.value.texture_binding + MAX(E.value.array_size, 1));
 				} else {
+					if (E.value.is_buffer()) {
+						continue; // Storage buffers have their own descriptor bindings, not UBO offsets.
+					}
 					if (E.value.scope == SL::ShaderNode::Uniform::SCOPE_INSTANCE) {
 						continue; // Instances are indexed directly, don't need index uniforms.
 					}
@@ -568,6 +574,24 @@ String ShaderCompiler::_dump_node_code(const SL::Node *p_node, int p_level, Gene
 				const SL::ShaderNode::Uniform &uniform = pnode->uniforms[uniform_name];
 
 				String ucode;
+
+				if (uniform.is_buffer()) {
+					GeneratedCode::Buffer buffer;
+					buffer.name = uniform_name;
+					buffer.binding = actions.base_texture_binding_index + texture_slot_count + r_gen_code.buffers.size();
+					r_gen_code.buffers.push_back(buffer);
+
+					const String buffer_id = _mkid(uniform_name);
+					ucode = "layout(set = " + itos(actions.texture_layout_set) + ", binding = " + itos(buffer.binding) + ", std430) readonly buffer GodotReadonlyBuffer" + itos(buffer.binding) + " { uvec4 data[]; } " + buffer_id + ";\n";
+					ucode += "uvec4 godot_buffer_load_" + buffer_id + "(uint record_index) {\n";
+					ucode += "\tif (record_index >= uint(" + buffer_id + ".data.length())) { return uvec4(0u); }\n";
+					ucode += "\treturn " + buffer_id + ".data[record_index];\n}\n";
+					for (int j = 0; j < STAGE_MAX; j++) {
+						r_gen_code.stage_globals[j] += ucode;
+					}
+					p_actions.uniforms->insert(uniform_name, uniform);
+					continue;
+				}
 
 				if (uniform.scope == SL::ShaderNode::Uniform::SCOPE_INSTANCE) {
 					//insert, but don't generate any code.
@@ -941,7 +965,9 @@ String ShaderCompiler::_dump_node_code(const SL::Node *p_node, int p_level, Gene
 				if (!param_found && shader->uniforms.has(vnode->name)) {
 					//its a uniform!
 					const ShaderLanguage::ShaderNode::Uniform &u = shader->uniforms[vnode->name];
-					if (u.is_texture()) {
+					if (u.is_buffer()) {
+						code = _mkid(vnode->name);
+					} else if (u.is_texture()) {
 						StringName name;
 						if (u.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE) {
 							name = "color_buffer";
@@ -1075,7 +1101,7 @@ String ShaderCompiler::_dump_node_code(const SL::Node *p_node, int p_level, Gene
 				if (!param_found && shader->uniforms.has(anode->name)) {
 					//its a uniform!
 					const ShaderLanguage::ShaderNode::Uniform &u = shader->uniforms[anode->name];
-					if (u.is_texture()) {
+					if (u.is_buffer() || u.is_texture()) {
 						code = _mkid(anode->name); //texture, use as is
 					} else {
 						//a scalar or vector
@@ -1189,6 +1215,16 @@ String ShaderCompiler::_dump_node_code(const SL::Node *p_node, int p_level, Gene
 				case SL::OP_CONSTRUCT: {
 					ERR_FAIL_COND_V(onode->arguments[0]->type != SL::Node::NODE_TYPE_VARIABLE, String());
 					const SL::VariableNode *vnode = static_cast<const SL::VariableNode *>(onode->arguments[0]);
+					if (vnode->name == "buffer_load" || vnode->name == "buffer_length") {
+						ERR_FAIL_COND_V(onode->arguments[1]->type != SL::Node::NODE_TYPE_VARIABLE, String());
+						const String buffer_id = _mkid(static_cast<const SL::VariableNode *>(onode->arguments[1])->name);
+						if (vnode->name == "buffer_load") {
+							code = "godot_buffer_load_" + buffer_id + "(" + _dump_node_code(onode->arguments[2], p_level, r_gen_code, p_actions, p_default_actions, false) + ")";
+						} else {
+							code = "uint(" + buffer_id + ".data.length())";
+						}
+						break;
+					}
 					const SL::FunctionNode *func = nullptr;
 					const bool is_internal_func = internal_functions.has(vnode->name);
 
@@ -1542,6 +1578,7 @@ ShaderLanguage::DataType ShaderCompiler::_get_global_shader_uniform_type(const S
 }
 
 Error ShaderCompiler::compile(RSE::ShaderMode p_mode, const String &p_code, IdentifierActions *p_actions, const String &p_path, GeneratedCode &r_gen_code) {
+	r_gen_code.buffers.clear();
 	SL::ShaderCompileInfo info;
 	info.functions = ShaderTypes::get_singleton()->get_functions(p_mode);
 	info.render_modes = ShaderTypes::get_singleton()->get_modes(p_mode);
@@ -1630,6 +1667,11 @@ Error ShaderCompiler::compile(RSE::ShaderMode p_mode, const String &p_code, Iden
 
 		_err_print_error(nullptr, file.utf8().get_data(), line, parser.get_error_text().utf8().get_data(), false, ERR_HANDLER_SHADER);
 		return err;
+	}
+
+	for (const KeyValue<StringName, SL::ShaderNode::Uniform> &E : parser.get_shader()->uniforms) {
+		ERR_FAIL_COND_V_MSG(E.value.is_buffer() && (!p_actions->allow_readonly_buffers || p_mode != RSE::SHADER_SPATIAL), ERR_UNAVAILABLE,
+				"readonly_buffer uniforms require the Vulkan Forward+ renderer.");
 	}
 
 	r_gen_code.defines.clear();

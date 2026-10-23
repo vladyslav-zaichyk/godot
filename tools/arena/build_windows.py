@@ -99,7 +99,7 @@ def main():
                         '--godot-output-dir', ROOT / 'bin', '--godot-platform', 'windows',
                         '--push-nupkgs-local', feed])
     execute('native-contracts', [binary, '--headless', '--test',
-                                '--test-case=[AABB]*,[Transform3D]*,[Basis]*,[ShaderLanguage]*', '--no-colors'])
+                                '--test-case=[AABB]*,[Transform3D]*,[Basis]*,*[BufferRD]*', '--no-colors'])
     record['sdk_packages'] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in feed.glob('*.nupkg')}
     record['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
     record['sdk_versions'] = subprocess.check_output(['dotnet', '--list-sdks'], env=env, text=True).splitlines()
