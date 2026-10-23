@@ -162,7 +162,7 @@ public partial class InstanceIndirectionContract : Node
             TransparentBg = false, RenderTargetUpdateMode = SubViewport.UpdateMode.Always };
         AddChild(_view);
         _view.AddChild(new Camera3D { Projection = Camera3D.ProjectionType.Orthogonal, Size = 4,
-            KeepAspect = Camera3D.KeepAspectEnum.KeepHeight, Near = 0.1f, Far = 10,
+            KeepAspect = Camera3D.KeepAspectEnum.Height, Near = 0.1f, Far = 10,
             Position = new Vector3(0, 0, 2), Current = true });
         _texture = _view.GetTexture();
     }
