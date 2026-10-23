@@ -28,7 +28,8 @@ production or gameplay admission. BufferRD development has separate checks.
 3. Reapply the ordered feature commits, resolve conflicts, and inspect
    `git range-diff` against the previous patch series. Rebase only unpublished
    candidates; keep existing consumer history available.
-4. Build an unmodified upstream control and the feature candidate using matching
+4. Update the build helper's `PIN` to the new verified upstream base and review
+   its managed SDK/toolchain pins. Build an unmodified upstream control and the feature candidate using matching
    options. Regenerate native/.NET bindings and use a new SDK/package identity.
 5. Run compiler/API, real-backend correctness and lifetime checks. The renderer
    owner separately runs matched performance/quality qualification.
@@ -56,6 +57,32 @@ local SDK feed, notices, manifest and validation receipts. Store durable builds
 as versioned Release assets; CI artifacts are temporary candidates. Verify a
 bundle's SHA-256 manifest before use. Other OS/architecture/backend combinations
 need separate builds and qualification.
+
+For a C# consumer, put a `NuGet.Config` beside its `.csproj` before its first
+restore. Point the relative feed path at this bundle's `NuGetFeed` directory:
+
+```xml
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="ArenaEngine" value="../ArenaEngine/NuGetFeed" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="ArenaEngine">
+      <package pattern="Godot.*" />
+      <package pattern="GodotSharp" />
+      <package pattern="GodotSharpEditor" />
+    </packageSource>
+    <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+  </packageSourceMapping>
+</configuration>
+```
+
+Use the exact `sdk_version` from the bundle manifest in the project's
+`Godot.NET.Sdk` reference. The native editor, managed assemblies and generated
+packages must all come from that same bundle. No global NuGet changes are needed.
 
 The `Arena Windows editor` workflow is manual only. Upstream workflows remain
 disabled in this fork. Hosted CI does not prove a Vulkan GPU contract, and the

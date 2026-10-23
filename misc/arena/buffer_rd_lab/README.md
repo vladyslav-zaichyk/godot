@@ -27,6 +27,8 @@ Vulkan/Forward+ window. It isolates NuGet, dotnet home, application data and tem
 under the output directory. It does not modify global package sources, move
 focus, close applications or install helpers. The SDK property is
 `ArenaGodotSdkVersion`; `--sdk-version` can supply its value explicitly.
+Only the seven authored project inputs are staged under `output/work/project`.
+A project-local NuGet config isolates SDK resolution before restore begins.
 The coordinator runs one fixture build/contract at a time per checkout.
 
 ## Proof and limits
@@ -80,8 +82,8 @@ plateaus. Only a complete PASS qualifies this restricted API path.
 
 ## Output ownership
 
-The explicit output directory owns work caches, temporary files, build/runtime
-logs and receipts. The project also generates `.godot/` and possibly Godot `.uid`
-files; authored files are the seven paths listed in `run_contract.py:INPUTS`.
+The explicit output directory owns the staged project, its `.godot/` output,
+work caches, temporary files, build/runtime logs and receipts. The source project
+stays untouched; authored inputs are the seven paths in `run_contract.py:INPUTS`.
 Retain designated raw receipts and exact consumer builds before verified cleanup.
 No cleanup command is supplied and no other checkout/cache is touched.

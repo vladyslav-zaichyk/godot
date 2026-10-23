@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -241,6 +242,10 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=False)
     work = output / "work"
     work.mkdir()
+    project = work / "project"
+    project.mkdir()
+    for name in INPUTS:
+        shutil.copy2(PROJECT / name, project / name)
     env = os.environ.copy()
     for key, folder in {"TEMP": "tmp", "TMP": "tmp", "APPDATA": "appdata", "LOCALAPPDATA": "localappdata",
                         "DOTNET_CLI_HOME": "dotnet-home", "NUGET_PACKAGES": "nuget-packages",
@@ -249,11 +254,14 @@ def main() -> int:
         path = work / folder
         path.mkdir(exist_ok=True)
         env[key] = str(path)
-    config = work / "NuGet.Config"
+    # SDK resolution happens before restore's --configfile is applied. Keep the
+    # isolated config beside the staged project so ancestor/user feeds cannot
+    # redirect the generated SDK to a different engine build.
+    config = project / "NuGet.Config"
     config.write_bytes(('<?xml version="1.0" encoding="utf-8"?>\n<configuration><packageSources><clear />'
         '<add key="BufferRdLocal" value=' + quoteattr(feed.as_posix()) + ' />'
         '<add key="nuget.org" value="https://api.nuget.org/v3/index.json" /></packageSources>'
-        '<packageSourceMapping><packageSource key="BufferRdLocal"><package pattern="Godot.*" />'
+        '<packageSourceMapping><clear /><packageSource key="BufferRdLocal"><package pattern="Godot.*" />'
         '<package pattern="GodotSharp" /><package pattern="GodotSharpEditor" /></packageSource>'
         '<packageSource key="nuget.org"><package pattern="*" /></packageSource></packageSourceMapping>'
         '</configuration>\n').encode())
@@ -268,11 +276,11 @@ def main() -> int:
     properties = [f"-p:ArenaGodotSdkVersion={args.sdk_version}", f"-p:BaseIntermediateOutputPath={obj}",
                   f"-p:MSBuildProjectExtensionsPath={obj}", f"-p:IntermediateOutputPath={obj}Debug/",
                   "-p:Optimize=true", "-p:UseSharedCompilation=false"]
-    csproj = PROJECT / "BufferRdLab.csproj"
+    csproj = project / "BufferRdLab.csproj"
     run = {"engine": str(engine), "engine_sha256": engine_before, "engine_source_hash": args.engine_hash,
            "managed_api_sha256": api_before, "sdk_feed": str(feed), "sdk_version": args.sdk_version,
-           "project": str(PROJECT), "source_sha256": before,
-           "owned_output": str(output), "generated_project_output": str(PROJECT / ".godot"),
+           "project": str(project), "source_project": str(PROJECT), "source_sha256": before,
+           "owned_output": str(output), "generated_project_output": str(project / ".godot"),
            "scope": "Procedural numeric GPU correctness and bounded lifetime; no performance gate."}
     dump(output / "run.json", run)
     try:
@@ -280,24 +288,24 @@ def main() -> int:
         build = [args.dotnet, "build", str(csproj), "--configuration", "Debug", "--no-restore", "--no-incremental",
                  "--disable-build-servers", "-maxcpucount:2", *properties]
         for label, command in (("restore", restore), ("build", build)):
-            if execute(command, PROJECT, env, output, label, args.timeout):
+            if execute(command, project, env, output, label, args.timeout):
                 raise ValueError(label + " failed; inspect only its failed log.")
         assets = json.loads((Path(obj) / "project.assets.json").read_bytes())
         for package in ("GodotSharp", "GodotSharpEditor", "Godot.SourceGenerators"):
             restored = [name for name in assets["libraries"] if name.startswith(package + "/")]
             if restored != [package + "/" + args.sdk_version]:
                 raise ValueError("Restored incompatible managed API: " + repr(restored))
-        fixture_assembly = PROJECT / ".godot/mono/temp/bin/Debug/BufferRdLab.dll"
+        fixture_assembly = project / ".godot/mono/temp/bin/Debug/BufferRdLab.dll"
         fixture_before = sha(fixture_assembly)
-        if source_hashes() != before:
+        if source_hashes() != before or {name: sha(project / name) for name in INPUTS} != before:
             raise ValueError("Authored source changed while building the fixture.")
         run["managed_fixture_assembly_sha256"] = fixture_before
         dump(output / "run.json", run)
         record = output / "contract.json"
-        command = [str(engine), "--path", str(PROJECT), "--rendering-method", "forward_plus", "--rendering-driver", "vulkan",
+        command = [str(engine), "--path", str(project), "--rendering-method", "forward_plus", "--rendering-driver", "vulkan",
                    "--", "--record=" + str(record), "--expected-engine-hash=" + args.engine_hash,
                    "--expected-sdk-version=" + args.sdk_version]
-        code = execute(command, PROJECT, env, output, "runtime", args.timeout)
+        code = execute(command, project, env, output, "runtime", args.timeout)
         raw = json.loads(record.read_bytes()) if record.is_file() else {}
         shutdown = inspect_shutdown((output / "runtime.log").read_text(encoding="utf-8", errors="replace"),
                                     raw.get("expected_native_error_callbacks", []))
@@ -311,7 +319,8 @@ def main() -> int:
             raise ValueError("Runtime loaded a GodotSharp assembly from another bundle.")
         if raw["managed_fixture_assembly_sha256"] != fixture_before or sha(fixture_assembly) != fixture_before:
             raise ValueError("Runtime fixture assembly differs from the just-built assembly.")
-        if before != source_hashes() or engine_before != sha(engine) or api_before != sha(api_path):
+        if (before != source_hashes() or {name: sha(project / name) for name in INPUTS} != before
+                or engine_before != sha(engine) or api_before != sha(api_path)):
             raise ValueError("Authored source or engine bundle changed during the contract.")
         summary.update(contract_sha256=sha(record), source_sha256=before,
                        shutdown_receipt_sha256=sha(output / "shutdown.json"))
