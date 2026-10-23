@@ -220,12 +220,14 @@ public partial class BufferRdContract : Node
         ShaderMaterial material = _consumers[consumer] ?? throw new Exception("Missing material.");
         _instances[consumer].Visible = wrapper != null;
         await OnRender(() => {
-            material.SetShaderParameter("data", wrapper == null ? default(Variant) : Variant.From(wrapper));
+            using Variant parameter = wrapper == null ? default(Variant) : Variant.From(wrapper);
+            material.SetShaderParameter("data", parameter);
             material.SetShaderParameter("seed", seed);
             material.SetShaderParameter("record_index", index);
             material.SetShaderParameter("expect_oob", oob);
             _bindings++;
-            Check(material.GetShaderParameter("data").AsGodotObject() == wrapper, "Material cache does not retain the selected wrapper.");
+            using Variant cached = material.GetShaderParameter("data");
+            Check(cached.AsGodotObject() == wrapper, "Material cache does not retain the selected wrapper.");
         });
     }
 
