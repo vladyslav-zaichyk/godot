@@ -1,0 +1,45 @@
+name: Arena Windows editor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  editor:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.203'
+      - name: Build native editor and matching managed API
+        run: python tools/arena/build_windows.py --jobs 4
+      - name: Retain build receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-windows-receipts-${{ github.sha }}
+          path: .arena/build-*/
+          retention-days: 30
+      - name: Retain editor candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-windows-editor-${{ github.sha }}
+          path: |
+            bin/*.arena_dev.mono.exe
+            bin/GodotSharp/
+            bin/_sc_
+            .arena/nuget-source/
+            LICENSE.txt
+            COPYRIGHT.txt
+            AUTHORS.md
+            ARENA_ENGINE.md
+          retention-days: 30
