@@ -1,0 +1,27 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0,std430) buffer Vertices { uint words[]; } vertices;
+layout(set=0,binding=1,std430) buffer Indices { uint words[]; } indices;
+layout(push_constant,std430) uniform Params {
+    uint vertex_stride_words;
+    uint vertex_offset_words;
+    uint index_stride_bytes;
+    uint phase;
+} params;
+void main() {
+    vec2 corners[4] = vec2[4](vec2(-0.7,-0.7),vec2(0.7,-0.7),vec2(0.7,0.7),vec2(-0.7,0.7));
+    float center = -2.0 + 2.0 * float(params.phase);
+    for (uint i=0u; i<4u; i++) {
+        uint at = params.vertex_offset_words + i * params.vertex_stride_words;
+        vertices.words[at] = floatBitsToUint(corners[i].x + center);
+        vertices.words[at+1u] = floatBitsToUint(corners[i].y);
+        vertices.words[at+2u] = floatBitsToUint(0.0);
+    }
+    // Phase 1 duplicates the lower-right triangle; other phases draw the full quad.
+    uint ids[6] = uint[6](0u,1u,2u,0u,params.phase == 1u ? 1u : 2u,params.phase == 1u ? 2u : 3u);
+    if (params.index_stride_bytes == 2u) {
+        for (uint i=0u; i<3u; i++) indices.words[i] = ids[i*2u] | (ids[i*2u+1u] << 16u);
+    } else {
+        for (uint i=0u; i<6u; i++) indices.words[i] = ids[i];
+    }
+}
