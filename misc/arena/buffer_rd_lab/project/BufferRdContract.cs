@@ -496,6 +496,8 @@ public partial class BufferRdContract : Node
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(result, new JsonSerializerOptions { WriteIndented = true }));
         GD.Print("BufferRD contract result " + path);
+        OS.RemoveLogger(_errors);
+        _errors.Dispose();
         GetTree().Quit(passed ? 0 : 2);
     }
 }
