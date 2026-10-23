@@ -23,7 +23,8 @@ INPUTS = ("BufferRdLab.csproj", "project.godot", "Main.tscn", "BufferRdContract.
 CASES = {"initial-compute": 2, "same-rid-producer-update": 2,
          "oracle-negative-control": 2, "oob-length-and-uint-max": 2,
          "one-consumer-detached": 1, "replacement-and-original-independent": 2,
-         "replacement-shared-consumers": 2, "binding-guards-preserve-a": 2}
+         "replacement-shared-consumers": 2, "binding-guards-preserve-a": 2,
+         "missing-buffer-zero-record": 1}
 INVALID_BIND = "Read-only buffer shader parameters require a live, attached BufferRD resource."
 THREAD_BIND = "BufferRD shader parameter assignments require the render thread."
 GUARDS = {"bare-rid": INVALID_BIND, "empty-wrapper": INVALID_BIND,
@@ -50,8 +51,8 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
                 "engine_hash": engine_hash, "sdk_version": sdk_version,
                 "driver": "vulkan", "renderer": "forward_plus",
                 "attach_ok_calls": 121, "wrapper_creations": 82, "wrapper_disposals": 82,
-                "compute_dispatches": 120, "numeric_viewport_audits": 522,
-                "numeric_pixel_samples": 1566, "viewport_image_readbacks": 522,
+                "compute_dispatches": 120, "numeric_viewport_audits": 562,
+                "numeric_pixel_samples": 1686, "viewport_image_readbacks": 562,
                 "total_native_error_callbacks": 4,
                 "final_owned_gpu_buffer_count": 0, "final_owned_rd_resource_count": 0,
                 "final_wrapper_count": 0, "final_material_count": 0,
@@ -121,7 +122,7 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
     if len(cycles) != 40 or [item.get("cycle") for item in cycles] != list(range(40)):
         errors.append("Incomplete ordered lifecycle ledger.")
     for item in cycles:
-        if (item.get("raster_audits") != (15 if item.get("cycle") == 8 else 13) or item.get("final_owned_buffers") != 0
+        if (item.get("raster_audits") != (16 if item.get("cycle") == 8 else 14) or item.get("final_owned_buffers") != 0
                 or item.get("final_wrappers") != 0 or item.get("final_materials") != 0
                 or item.get("warmup") != (item.get("cycle", 40) < 8)):
             errors.append("A lifecycle row is incomplete or retained resources.")
@@ -143,7 +144,7 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
     if errors:
         raise ValueError("\n".join(errors))
     return {"passed": True, "warmup_cycles": 8, "settled_cycles": 32,
-            "numeric_viewport_audits": 522, "negative_attach_cases": 8, "material_binding_guard_cases": 4,
+            "numeric_viewport_audits": 562, "negative_attach_cases": 8, "material_binding_guard_cases": 4,
             "final_owned_resources": 0,
             "memory_scope": "Logical RD bytes and native ObjectDB object plateau; not physical VRAM residency.",
             "performance_qualified": False}

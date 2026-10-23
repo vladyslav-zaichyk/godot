@@ -31,9 +31,9 @@ The coordinator runs one fixture build/contract at a time per checkout.
 
 ## Proof and limits
 
-Each of eight warmup and 32 settled cycles performs thirteen numeric viewport
+Each of eight warmup and 32 settled cycles performs fourteen numeric viewport
 audits. The first settled cycle adds one two-consumer phase after four rejected
-material assignments, for 522 numeric viewport audits total. A compute shader
+material assignments, for 562 numeric viewport audits total. A compute shader
 writes four records. Vertex and fragment consumers
 check exact words, float reinterpretation and length. RGB output contains only
 zero/one endpoints; three interior pixels are inspected through `GetImage`
@@ -43,6 +43,8 @@ materials and stale data. Changing the producer without replacing its RID must
 change the expected GPU result. Two consumers share a wrapper, one detaches,
 then materials bind a new wrapper and a different caller buffer. Length and
 UINT_MAX out-of-range loads must return zero.
+An explicitly visible detached consumer must read the fallback's one zero record
+and report length 1 while the other consumer keeps reading the caller's buffer.
 
 Eight attach rejections cover invalid/freed RIDs, a uniform buffer, undersized
 and non-record-aligned storage, another valid buffer, local-device storage and

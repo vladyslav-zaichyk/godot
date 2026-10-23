@@ -4,6 +4,7 @@ render_mode unshaded, cull_disabled, fog_disabled, shadows_disabled;
 uniform readonly_buffer data;
 uniform int seed = 0;
 uniform int record_index = 0;
+uniform int expected_length = 4;
 uniform bool expect_oob = false;
 varying flat uint vertex_token;
 
@@ -26,5 +27,5 @@ void fragment() {
     bool words_ok = all(equal(actual, expected)) && vertex_token == uint(seed);
     bool float_ok = uintBitsToFloat(actual.z) == expected_float;
     ALBEDO = vec3(words_ok ? 1.0 : 0.0, float_ok ? 1.0 : 0.0,
-        buffer_length(data) == 4u ? 1.0 : 0.0);
+        buffer_length(data) == uint(expected_length) ? 1.0 : 0.0);
 }

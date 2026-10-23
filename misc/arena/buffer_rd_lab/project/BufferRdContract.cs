@@ -70,7 +70,7 @@ public partial class BufferRdContract : Node
                     resources = checked((long)Performance.GetMonitor(Performance.Monitor.ObjectCount));
                 });
                 Check(_wrappers.Count == 0 && _materials.Count == 0 && OwnedBuffers == 0, "A cycle retained owned consumers or buffers.");
-                Check(_rasterAudits - firstRaster == (_currentCycle == WarmupCycles ? 15 : 13), "A cycle did not execute its fixed numeric viewport audits.");
+                Check(_rasterAudits - firstRaster == (_currentCycle == WarmupCycles ? 16 : 14), "A cycle did not execute its fixed numeric viewport audits.");
                 _cycles.Add(new { cycle = _currentCycle, warmup = _currentCycle < WarmupCycles,
                     checks = _checks - firstCheck, raster_audits = _rasterAudits - firstRaster,
                     rd_logical_buffer_bytes = bytes, native_object_count = resources,
@@ -217,7 +217,7 @@ public partial class BufferRdContract : Node
         _rd.ComputeListEnd(); _dispatches++;
     }
 
-    async Task Bind(int consumer, BufferRD? wrapper, int seed, int index, bool oob = false)
+    async Task Bind(int consumer, BufferRD? wrapper, int seed, int index, bool oob = false, int expectedLength = RecordCount)
     {
         ShaderMaterial material = _consumers[consumer] ?? throw new Exception("Missing material.");
         _instances[consumer].Visible = wrapper != null;
@@ -226,6 +226,7 @@ public partial class BufferRdContract : Node
             material.SetShaderParameter("data", parameter);
             material.SetShaderParameter("seed", seed);
             material.SetShaderParameter("record_index", index);
+            material.SetShaderParameter("expected_length", expectedLength);
             material.SetShaderParameter("expect_oob", oob);
             _bindings++;
             using Variant cached = material.GetShaderParameter("data");
@@ -302,6 +303,10 @@ public partial class BufferRdContract : Node
         if (cycle == WarmupCycles) await NegativeCases(_wrapperA, _a, _b);
         await Bind(0, null, 0, 0); await Bind(1, _wrapperA, updatedA, 3);
         await Numeric("one-consumer-detached", new[] { 1 }, new byte[] { 255, 255, 255 });
+        await Bind(0, null, 0, 0, true, 1);
+        _instances[0].Visible = true;
+        await Numeric("missing-buffer-zero-record", new[] { 0 }, new byte[] { 255, 255, 255 });
+        _instances[0].Visible = false;
         _wrapperB = NewWrapper();
         await OnRender(() => { Attach(_wrapperB, _b); Produce(_setB, (uint)seedB); });
         await Bind(0, _wrapperB, seedB, 0);
