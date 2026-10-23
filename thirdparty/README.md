@@ -955,6 +955,11 @@ Files extracted from upstream source:
 - Version: git (29a77fca357567d00aa37b8ffde19c19cfe477c4, 2026)
 - License: MIT
 
+Local patches (apply from the Godot repository root):
+
+- `re-spirv/patches/0001-support-op-array-length.patch`: preserve runtime array
+  length queries and distinguish the Structure ID from the ArrayMember literal.
+
 Files extracted from upstream source:
 
 - `re-spirv.cpp`

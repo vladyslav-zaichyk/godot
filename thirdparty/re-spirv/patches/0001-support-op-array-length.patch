@@ -1,0 +1,20 @@
+diff --git a/thirdparty/re-spirv/re-spirv.cpp b/thirdparty/re-spirv/re-spirv.cpp
+index 1734593..9a85183 100644
+--- a/thirdparty/re-spirv/re-spirv.cpp
++++ b/thirdparty/re-spirv/re-spirv.cpp
+@@ -68,6 +68,7 @@ namespace respv {
+         case SpvOpLoad:
+         case SpvOpStore:
+         case SpvOpAccessChain:
++        case SpvOpArrayLength:
+         case SpvOpDecorate:
+         case SpvOpMemberDecorate:
+         case SpvOpVectorShuffle:
+@@ -333,6 +334,7 @@ namespace respv {
+             return true;
+         case SpvOpTypePointer:
+         case SpvOpLoad:
++        case SpvOpArrayLength: // Structure is an ID; ArrayMember is a literal.
+         case SpvOpCompositeExtract:
+         case SpvOpCopyObject:
+         case SpvOpTranspose:
