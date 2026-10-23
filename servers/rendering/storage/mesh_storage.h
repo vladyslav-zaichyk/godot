@@ -129,6 +129,10 @@ public:
 
 	virtual void multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors = false, bool p_use_custom_data = false, bool p_use_indirect = false);
 
+	virtual Error multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset);
+	virtual void multimesh_detach_shared_buffers(RID p_multimesh);
+	virtual bool multimesh_is_using_shared_buffers(RID p_multimesh) const;
+
 	virtual int multimesh_get_instance_count(RID p_multimesh) const;
 
 	virtual void multimesh_set_mesh(RID p_multimesh, RID p_mesh);

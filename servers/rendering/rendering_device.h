@@ -1022,6 +1022,8 @@ private:
 #endif
 
 public:
+	// Internal validation for borrowed native-renderer storage. Does not read GPU data.
+	bool storage_buffer_is_valid(RID p_buffer, uint64_t p_minimum_size, bool p_require_indirect = false) const;
 	RenderingDeviceDriver *get_device_driver() const { return driver; }
 	RenderingContextDriver *get_context_driver() const { return context; }
 

@@ -256,6 +256,8 @@ private:
 		RID uniform_set_3d;
 		RID uniform_set_2d;
 		RID command_buffer; //used if indirect setting is used
+		bool shared_buffers = false; // Both buffers are borrowed, never owned.
+		uint32_t command_byte_offset = 0;
 
 		bool dirty = false;
 		MultiMesh *dirty_list = nullptr;
@@ -269,6 +271,7 @@ private:
 
 	MultiMesh *multimesh_dirty_list = nullptr;
 
+	void _multimesh_clear_shared_uniform_sets(MultiMesh *p_multimesh);
 	_FORCE_INLINE_ void _multimesh_make_local(MultiMesh *multimesh) const;
 	_FORCE_INLINE_ void _multimesh_enable_motion_vectors(MultiMesh *multimesh);
 	_FORCE_INLINE_ void _multimesh_update_motion_vectors_data_cache(MultiMesh *multimesh);
@@ -659,6 +662,10 @@ public:
 	virtual void _multimesh_free(RID p_rid) override;
 
 	virtual void _multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors = false, bool p_use_custom_data = false, bool p_use_indirect = false) override;
+	virtual Error multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) override;
+	virtual void multimesh_detach_shared_buffers(RID p_multimesh) override;
+	virtual bool multimesh_is_using_shared_buffers(RID p_multimesh) const override;
+
 	virtual int _multimesh_get_instance_count(RID p_multimesh) const override;
 
 	virtual void _multimesh_set_mesh(RID p_multimesh, RID p_mesh) override;
@@ -693,6 +700,12 @@ public:
 	void _multimesh_get_motion_vectors_offsets(RID p_multimesh, uint32_t &r_current_offset, uint32_t &r_prev_offset);
 	bool _multimesh_uses_motion_vectors_offsets(RID p_multimesh);
 	bool _multimesh_uses_motion_vectors(RID p_multimesh);
+
+	_FORCE_INLINE_ uint32_t multimesh_get_command_byte_offset(RID p_multimesh) const {
+		const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, 0);
+		return multimesh->command_byte_offset;
+	}
 
 	_FORCE_INLINE_ bool multimesh_uses_indirect(RID p_multimesh) const {
 		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);

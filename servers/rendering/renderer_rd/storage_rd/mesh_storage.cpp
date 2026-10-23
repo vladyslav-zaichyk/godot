@@ -30,6 +30,8 @@
 
 #include "mesh_storage.h"
 
+#include "core/os/os.h"
+
 #include "servers/rendering/renderer_viewport.h"
 #include "servers/rendering/rendering_server.h"
 #include "servers/rendering/rendering_server_types.h"
@@ -1535,6 +1537,9 @@ void MeshStorage::_multimesh_initialize(RID p_rid) {
 }
 
 void MeshStorage::_multimesh_free(RID p_rid) {
+	if (multimesh_is_using_shared_buffers(p_rid)) {
+		multimesh_detach_shared_buffers(p_rid);
+	}
 	// Remove from interpolator.
 	_interpolation_data.notify_free_multimesh(p_rid);
 	_update_dirty_multimeshes();
@@ -1544,9 +1549,105 @@ void MeshStorage::_multimesh_free(RID p_rid) {
 	multimesh_owner.free(p_rid);
 }
 
+void MeshStorage::_multimesh_clear_shared_uniform_sets(MultiMesh *p_multimesh) {
+	RD *rd = RD::get_singleton();
+	if (p_multimesh->uniform_set_3d.is_valid() && rd->uniform_set_is_valid(p_multimesh->uniform_set_3d)) {
+		rd->free_rid(p_multimesh->uniform_set_3d);
+	}
+	if (p_multimesh->uniform_set_2d.is_valid() && rd->uniform_set_is_valid(p_multimesh->uniform_set_2d)) {
+		rd->free_rid(p_multimesh->uniform_set_2d);
+	}
+	p_multimesh->uniform_set_3d = RID();
+	p_multimesh->uniform_set_2d = RID();
+}
+
+Error MeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) {
+	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	if (!multimesh) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (OS::get_singleton()->get_current_rendering_method() != "forward_plus" || OS::get_singleton()->get_current_rendering_driver_name() != "vulkan") {
+		return ERR_UNAVAILABLE;
+	}
+	if (p_pool_record_capacity <= 0 || p_command_byte_offset < 0 || (p_command_byte_offset % sizeof(uint32_t)) != 0 || p_transform_buffer == p_indirect_command_buffer) {
+		return ERR_INVALID_PARAMETER;
+	}
+	RD *rd = RD::get_singleton();
+	if (!rd->get_device_driver()->supports_indirect_first_instance()) {
+		return ERR_UNAVAILABLE;
+	}
+	if (!rd->storage_buffer_is_valid(p_transform_buffer, uint64_t(p_pool_record_capacity) * 12 * sizeof(float)) || !rd->storage_buffer_is_valid(p_indirect_command_buffer, uint64_t(p_command_byte_offset) + INDIRECT_MULTIMESH_COMMAND_STRIDE * sizeof(uint32_t), true)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const Mesh *mesh = mesh_owner.get_or_null(multimesh->mesh);
+	if (!mesh || mesh->surface_count != 1 || mesh->surfaces[0]->index_count == 0 || mesh->surfaces[0]->primitive != RSE::PRIMITIVE_TRIANGLES || mesh->surfaces[0]->lod_count != 0 || mesh->shadow_mesh.is_valid() || mesh->blend_shape_count != 0) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (!multimesh->custom_aabb.is_finite() || !multimesh->custom_aabb.has_volume()) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const MultiMeshInterpolator &interpolator = multimesh->interpolator;
+	if (interpolator.interpolated || interpolator.on_interpolate_update_list || interpolator.on_transform_update_list || !interpolator._data_curr.is_empty() || !interpolator._data_prev.is_empty() || !interpolator._data_interpolated.is_empty() || multimesh->dirty || !multimesh->data_cache.is_empty()) {
+		return ERR_ALREADY_IN_USE;
+	}
+	if (!multimesh->shared_buffers && (multimesh->instances != 0 || multimesh->buffer.is_valid() || multimesh->command_buffer.is_valid())) {
+		return ERR_ALREADY_IN_USE;
+	}
+	if (RSG::viewport->get_num_viewports_with_motion_vectors() > 0 || RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() > 0) {
+		return ERR_UNAVAILABLE;
+	}
+	// All validation precedes mutation: failed rebinds preserve the old view.
+	_multimesh_clear_shared_uniform_sets(multimesh);
+	multimesh->shared_buffers = true;
+	multimesh->buffer = p_transform_buffer;
+	multimesh->command_buffer = p_indirect_command_buffer;
+	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
+	multimesh->instances = p_pool_record_capacity;
+	multimesh->visible_instances = -1;
+	multimesh->indirect = true;
+	multimesh->xform_format = RSE::MULTIMESH_TRANSFORM_3D;
+	multimesh->uses_colors = false;
+	multimesh->uses_custom_data = false;
+	multimesh->stride_cache = 12;
+	multimesh->color_offset_cache = 12;
+	multimesh->custom_data_offset_cache = 12;
+	multimesh->buffer_set = false;
+	multimesh->motion_vectors_enabled = false;
+	multimesh->motion_vectors_current_offset = 0;
+	multimesh->motion_vectors_previous_offset = 0;
+	multimesh->motion_vectors_last_change = -1;
+	multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MULTIMESH);
+	return OK;
+}
+
+void MeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
+	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	ERR_FAIL_NULL(multimesh);
+	if (!multimesh->shared_buffers) {
+		return;
+	}
+	_multimesh_clear_shared_uniform_sets(multimesh);
+	// The caller owns both buffers. Detach and view destruction must never free them.
+	multimesh->buffer = RID();
+	multimesh->command_buffer = RID();
+	multimesh->command_byte_offset = 0;
+	multimesh->shared_buffers = false;
+	multimesh->instances = 0;
+	multimesh->visible_instances = -1;
+	multimesh->indirect = false;
+	multimesh->buffer_set = false;
+	multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MULTIMESH);
+}
+
+bool MeshStorage::multimesh_is_using_shared_buffers(RID p_multimesh) const {
+	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	return multimesh && multimesh->shared_buffers;
+}
+
 void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors, bool p_use_custom_data, bool p_use_indirect) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
 
 	if (multimesh->instances == p_instances && multimesh->xform_format == p_transform_format && multimesh->uses_colors == p_use_colors && multimesh->uses_custom_data == p_use_custom_data) {
 		return;
@@ -1602,6 +1703,7 @@ void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RSE
 }
 
 void MeshStorage::_multimesh_enable_motion_vectors(MultiMesh *multimesh) {
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "Shared MultiMesh buffers do not have CPU caches or engine-managed history.");
 	if (multimesh->motion_vectors_enabled) {
 		return;
 	}
@@ -1644,6 +1746,11 @@ void MeshStorage::_multimesh_enable_motion_vectors(MultiMesh *multimesh) {
 void MeshStorage::_multimesh_get_motion_vectors_offsets(RID p_multimesh, uint32_t &r_current_offset, uint32_t &r_prev_offset) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	if (multimesh->shared_buffers) {
+		r_current_offset = 0;
+		r_prev_offset = 0;
+		return;
+	}
 	r_current_offset = multimesh->motion_vectors_current_offset;
 	if (!_multimesh_uses_motion_vectors(multimesh)) {
 		multimesh->motion_vectors_previous_offset = multimesh->motion_vectors_current_offset;
@@ -1666,6 +1773,7 @@ int MeshStorage::_multimesh_get_instance_count(RID p_multimesh) const {
 void MeshStorage::_multimesh_set_mesh(RID p_multimesh, RID p_mesh) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
 	if (multimesh->mesh == p_mesh) {
 		return;
 	}
@@ -1718,6 +1826,7 @@ void MeshStorage::_multimesh_set_mesh(RID p_multimesh, RID p_mesh) {
 #define MULTIMESH_DIRTY_REGION_SIZE 512
 
 void MeshStorage::_multimesh_make_local(MultiMesh *multimesh) const {
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "Shared MultiMesh buffers do not have CPU caches or engine-managed history.");
 	if (multimesh->data_cache.size() > 0) {
 		return; //already local
 	}
@@ -1753,6 +1862,7 @@ void MeshStorage::_multimesh_make_local(MultiMesh *multimesh) const {
 }
 
 void MeshStorage::_multimesh_update_motion_vectors_data_cache(MultiMesh *multimesh) {
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "Shared MultiMesh buffers do not have CPU caches or engine-managed history.");
 	ERR_FAIL_COND(multimesh->data_cache.is_empty());
 
 	if (!multimesh->motion_vectors_enabled) {
@@ -1784,6 +1894,9 @@ void MeshStorage::_multimesh_update_motion_vectors_data_cache(MultiMesh *multime
 }
 
 bool MeshStorage::_multimesh_uses_motion_vectors(MultiMesh *multimesh) {
+	if (multimesh->shared_buffers) {
+		return false;
+	}
 	return (RSG::rasterizer->get_frame_number() - multimesh->motion_vectors_last_change) < 2;
 }
 
@@ -1880,6 +1993,7 @@ void MeshStorage::_multimesh_re_create_aabb(MultiMesh *multimesh, const float *p
 void MeshStorage::_multimesh_instance_set_transform(RID p_multimesh, int p_index, const Transform3D &p_transform) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_INDEX(p_index, multimesh->instances);
 	ERR_FAIL_COND(multimesh->xform_format != RSE::MULTIMESH_TRANSFORM_3D);
 
@@ -1917,6 +2031,7 @@ void MeshStorage::_multimesh_instance_set_transform(RID p_multimesh, int p_index
 void MeshStorage::_multimesh_instance_set_transform_2d(RID p_multimesh, int p_index, const Transform2D &p_transform) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_INDEX(p_index, multimesh->instances);
 	ERR_FAIL_COND(multimesh->xform_format != RSE::MULTIMESH_TRANSFORM_2D);
 
@@ -1944,6 +2059,7 @@ void MeshStorage::_multimesh_instance_set_transform_2d(RID p_multimesh, int p_in
 void MeshStorage::_multimesh_instance_set_color(RID p_multimesh, int p_index, const Color &p_color) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_INDEX(p_index, multimesh->instances);
 	ERR_FAIL_COND(!multimesh->uses_colors);
 
@@ -1967,6 +2083,7 @@ void MeshStorage::_multimesh_instance_set_color(RID p_multimesh, int p_index, co
 void MeshStorage::_multimesh_instance_set_custom_data(RID p_multimesh, int p_index, const Color &p_color) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_INDEX(p_index, multimesh->instances);
 	ERR_FAIL_COND(!multimesh->uses_custom_data);
 
@@ -2004,6 +2121,7 @@ Dependency *MeshStorage::multimesh_get_dependency(RID p_multimesh) const {
 Transform3D MeshStorage::_multimesh_instance_get_transform(RID p_multimesh, int p_index) const {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL_V(multimesh, Transform3D());
+	ERR_FAIL_COND_V_MSG(multimesh->shared_buffers, Transform3D(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_INDEX_V(p_index, multimesh->instances, Transform3D());
 	ERR_FAIL_COND_V(multimesh->xform_format != RSE::MULTIMESH_TRANSFORM_3D, Transform3D());
 
@@ -2035,6 +2153,7 @@ Transform3D MeshStorage::_multimesh_instance_get_transform(RID p_multimesh, int 
 Transform2D MeshStorage::_multimesh_instance_get_transform_2d(RID p_multimesh, int p_index) const {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL_V(multimesh, Transform2D());
+	ERR_FAIL_COND_V_MSG(multimesh->shared_buffers, Transform2D(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_INDEX_V(p_index, multimesh->instances, Transform2D());
 	ERR_FAIL_COND_V(multimesh->xform_format != RSE::MULTIMESH_TRANSFORM_2D, Transform2D());
 
@@ -2060,6 +2179,7 @@ Transform2D MeshStorage::_multimesh_instance_get_transform_2d(RID p_multimesh, i
 Color MeshStorage::_multimesh_instance_get_color(RID p_multimesh, int p_index) const {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL_V(multimesh, Color());
+	ERR_FAIL_COND_V_MSG(multimesh->shared_buffers, Color(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_INDEX_V(p_index, multimesh->instances, Color());
 	ERR_FAIL_COND_V(!multimesh->uses_colors, Color());
 
@@ -2083,6 +2203,7 @@ Color MeshStorage::_multimesh_instance_get_color(RID p_multimesh, int p_index) c
 Color MeshStorage::_multimesh_instance_get_custom_data(RID p_multimesh, int p_index) const {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL_V(multimesh, Color());
+	ERR_FAIL_COND_V_MSG(multimesh->shared_buffers, Color(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_INDEX_V(p_index, multimesh->instances, Color());
 	ERR_FAIL_COND_V(!multimesh->uses_custom_data, Color());
 
@@ -2106,6 +2227,7 @@ Color MeshStorage::_multimesh_instance_get_custom_data(RID p_multimesh, int p_in
 void MeshStorage::_multimesh_set_buffer(RID p_multimesh, const Vector<float> &p_buffer) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_COND(p_buffer.size() != (multimesh->instances * (int)multimesh->stride_cache));
 
 	bool used_motion_vectors = multimesh->motion_vectors_enabled;
@@ -2165,6 +2287,7 @@ RID MeshStorage::_multimesh_get_buffer_rd_rid(RID p_multimesh) const {
 Vector<float> MeshStorage::_multimesh_get_buffer(RID p_multimesh) const {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL_V(multimesh, Vector<float>());
+	ERR_FAIL_COND_V_MSG(multimesh->shared_buffers, Vector<float>(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	if (multimesh->buffer.is_null()) {
 		return Vector<float>();
 	} else {
@@ -2187,6 +2310,7 @@ Vector<float> MeshStorage::_multimesh_get_buffer(RID p_multimesh) const {
 void MeshStorage::_multimesh_set_visible_instances(RID p_multimesh, int p_visible) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
 	ERR_FAIL_COND(p_visible < -1 || p_visible > multimesh->instances);
 	if (multimesh->visible_instances == p_visible) {
 		return;
@@ -2224,6 +2348,7 @@ int MeshStorage::_multimesh_get_visible_instances(RID p_multimesh) const {
 void MeshStorage::_multimesh_set_custom_aabb(RID p_multimesh, const AABB &p_aabb) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
+	ERR_FAIL_COND_MSG(multimesh->shared_buffers && (!p_aabb.is_finite() || !p_aabb.has_volume()), "Shared MultiMesh buffers require finite, nonempty local bounds.");
 	multimesh->custom_aabb = p_aabb;
 	multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_AABB);
 }
@@ -2257,6 +2382,7 @@ MeshStorage::MultiMeshInterpolator *MeshStorage::_multimesh_get_interpolator(RID
 void MeshStorage::_update_dirty_multimeshes() {
 	while (multimesh_dirty_list) {
 		MultiMesh *multimesh = multimesh_dirty_list;
+		ERR_FAIL_COND_MSG(multimesh->shared_buffers, "Shared MultiMesh buffers must never enter the CPU dirty list.");
 
 		if (multimesh->data_cache.size()) { //may have been cleared, so only process if it exists
 

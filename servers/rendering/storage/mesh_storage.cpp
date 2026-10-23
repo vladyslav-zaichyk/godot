@@ -46,6 +46,7 @@ void RendererMeshStorage::multimesh_free(RID p_rid) {
 }
 
 void RendererMeshStorage::multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors, bool p_use_custom_data, bool p_use_indirect) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi) {
 		mmi->_transform_format = p_transform_format;
@@ -68,15 +69,28 @@ void RendererMeshStorage::multimesh_allocate_data(RID p_multimesh, int p_instanc
 	_multimesh_allocate_data(p_multimesh, p_instances, p_transform_format, p_use_colors, p_use_custom_data, p_use_indirect);
 }
 
+Error RendererMeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) {
+	return ERR_UNAVAILABLE;
+}
+
+void RendererMeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
+}
+
+bool RendererMeshStorage::multimesh_is_using_shared_buffers(RID p_multimesh) const {
+	return false;
+}
+
 int RendererMeshStorage::multimesh_get_instance_count(RID p_multimesh) const {
 	return _multimesh_get_instance_count(p_multimesh);
 }
 
 void RendererMeshStorage::multimesh_set_mesh(RID p_multimesh, RID p_mesh) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	_multimesh_set_mesh(p_multimesh, p_mesh);
 }
 
 void RendererMeshStorage::multimesh_instance_set_transform(RID p_multimesh, int p_index, const Transform3D &p_transform) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi && mmi->interpolated) {
 		ERR_FAIL_COND(p_index >= mmi->_num_instances);
@@ -115,6 +129,7 @@ void RendererMeshStorage::multimesh_instance_set_transform(RID p_multimesh, int 
 }
 
 void RendererMeshStorage::multimesh_instance_set_transform_2d(RID p_multimesh, int p_index, const Transform2D &p_transform) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi && mmi->interpolated) {
 		ERR_FAIL_COND(p_index >= mmi->_num_instances);
@@ -150,6 +165,7 @@ void RendererMeshStorage::multimesh_instance_set_transform_2d(RID p_multimesh, i
 }
 
 void RendererMeshStorage::multimesh_instance_set_color(RID p_multimesh, int p_index, const Color &p_color) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi && mmi->interpolated) {
 		ERR_FAIL_COND(p_index >= mmi->_num_instances);
@@ -177,6 +193,7 @@ void RendererMeshStorage::multimesh_instance_set_color(RID p_multimesh, int p_in
 }
 
 void RendererMeshStorage::multimesh_instance_set_custom_data(RID p_multimesh, int p_index, const Color &p_color) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi && mmi->interpolated) {
 		ERR_FAIL_COND(p_index >= mmi->_num_instances);
@@ -216,22 +233,27 @@ RID RendererMeshStorage::multimesh_get_mesh(RID p_multimesh) const {
 }
 
 Transform3D RendererMeshStorage::multimesh_instance_get_transform(RID p_multimesh, int p_index) const {
+	ERR_FAIL_COND_V_MSG(multimesh_is_using_shared_buffers(p_multimesh), Transform3D(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	return _multimesh_instance_get_transform(p_multimesh, p_index);
 }
 
 Transform2D RendererMeshStorage::multimesh_instance_get_transform_2d(RID p_multimesh, int p_index) const {
+	ERR_FAIL_COND_V_MSG(multimesh_is_using_shared_buffers(p_multimesh), Transform2D(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	return _multimesh_instance_get_transform_2d(p_multimesh, p_index);
 }
 
 Color RendererMeshStorage::multimesh_instance_get_color(RID p_multimesh, int p_index) const {
+	ERR_FAIL_COND_V_MSG(multimesh_is_using_shared_buffers(p_multimesh), Color(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	return _multimesh_instance_get_color(p_multimesh, p_index);
 }
 
 Color RendererMeshStorage::multimesh_instance_get_custom_data(RID p_multimesh, int p_index) const {
+	ERR_FAIL_COND_V_MSG(multimesh_is_using_shared_buffers(p_multimesh), Color(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	return _multimesh_instance_get_custom_data(p_multimesh, p_index);
 }
 
 void RendererMeshStorage::multimesh_set_buffer(RID p_multimesh, const Vector<float> &p_buffer) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi && mmi->interpolated) {
 		ERR_FAIL_COND_MSG(p_buffer.size() != mmi->_data_curr.size(), "Buffer should have " + itos(mmi->_data_curr.size()) + " elements, got " + itos(p_buffer.size()) + " instead.");
@@ -260,10 +282,12 @@ RID RendererMeshStorage::multimesh_get_buffer_rd_rid(RID p_multimesh) const {
 }
 
 Vector<float> RendererMeshStorage::multimesh_get_buffer(RID p_multimesh) const {
+	ERR_FAIL_COND_V_MSG(multimesh_is_using_shared_buffers(p_multimesh), Vector<float>(), "CPU readback is unavailable for shared MultiMesh buffers.");
 	return _multimesh_get_buffer(p_multimesh);
 }
 
 void RendererMeshStorage::multimesh_set_buffer_interpolated(RID p_multimesh, const Vector<float> &p_buffer, const Vector<float> &p_buffer_prev) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi) {
 		ERR_FAIL_COND_MSG(p_buffer.size() != mmi->_data_curr.size(), "Buffer for current frame should have " + itos(mmi->_data_curr.size()) + " elements, got " + itos(p_buffer.size()) + " instead.");
@@ -284,6 +308,10 @@ void RendererMeshStorage::multimesh_set_buffer_interpolated(RID p_multimesh, con
 }
 
 void RendererMeshStorage::multimesh_set_physics_interpolated(RID p_multimesh, bool p_interpolated) {
+	if (multimesh_is_using_shared_buffers(p_multimesh)) {
+		ERR_FAIL_COND_MSG(p_interpolated, "Physics interpolation is unavailable for shared MultiMesh buffers.");
+		return;
+	}
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi) {
 		if (p_interpolated == mmi->interpolated) {
@@ -304,6 +332,7 @@ void RendererMeshStorage::multimesh_set_physics_interpolated(RID p_multimesh, bo
 }
 
 void RendererMeshStorage::multimesh_set_physics_interpolation_quality(RID p_multimesh, RSE::MultimeshPhysicsInterpolationQuality p_quality) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	ERR_FAIL_COND((p_quality < 0) || (p_quality > 1));
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi) {
@@ -312,6 +341,7 @@ void RendererMeshStorage::multimesh_set_physics_interpolation_quality(RID p_mult
 }
 
 void RendererMeshStorage::multimesh_instance_reset_physics_interpolation(RID p_multimesh, int p_index) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi) {
 		ERR_FAIL_INDEX(p_index, mmi->_num_instances);
@@ -327,6 +357,7 @@ void RendererMeshStorage::multimesh_instance_reset_physics_interpolation(RID p_m
 }
 
 void RendererMeshStorage::multimesh_instances_reset_physics_interpolation(RID p_multimesh) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	MultiMeshInterpolator *mmi = _multimesh_get_interpolator(p_multimesh);
 	if (mmi && mmi->_data_curr.size()) {
 		// We don't want to invoke COW here, so copy the data directly.
@@ -338,6 +369,7 @@ void RendererMeshStorage::multimesh_instances_reset_physics_interpolation(RID p_
 }
 
 void RendererMeshStorage::multimesh_set_visible_instances(RID p_multimesh, int p_visible) {
+	ERR_FAIL_COND_MSG(multimesh_is_using_shared_buffers(p_multimesh), "CPU mutation is unavailable for shared MultiMesh buffers; detach first.");
 	return _multimesh_set_visible_instances(p_multimesh, p_visible);
 }
 

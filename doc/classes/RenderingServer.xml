@@ -2713,6 +2713,19 @@
 				Sets up the multimesh using the specified data. The number of instances is set by [param instances]. The format of the instance transforms is set by [param transform_format], which should be set according to whether the multimesh is meant to be rendered in 2D or 3D. If [param color_format] is [code]true[/code], each instance will have a color associated with it. If [param custom_data_format] is [code]true[/code], each instance will have a custom data vector associated with it. If [param use_indirect] is [code]true[/code], an indirect command buffer will be created for this multimesh, allowing the instance count to be modified directly on the GPU. See also [method multimesh_get_command_buffer_rd_rid].
 			</description>
 		</method>
+		<method name="multimesh_attach_shared_buffers">
+			<return type="int" enum="Error" />
+			<param index="0" name="multimesh" type="RID" />
+			<param index="1" name="transform_buffer" type="RID" />
+			<param index="2" name="pool_record_capacity" type="int" />
+			<param index="3" name="indirect_command_buffer" type="RID" />
+			<param index="4" name="command_byte_offset" type="int" />
+			<description>
+				Experimental Arena extension: borrows caller-owned RenderingDevice storage for an empty MultiMesh, or rebinds an existing shared view. Supported only by Forward+ with Vulkan devices supporting [code]drawIndirectFirstInstance[/code], for one indexed triangle surface without mesh LODs, a shadow mesh, blend shapes, colors, or custom data. Set the mesh and finite, nonempty MultiMesh-local [method multimesh_set_custom_aabb] before attaching. Do not allocate ordinary instance storage first. Invalid parameters leave an existing binding unchanged.
+				[param pool_record_capacity] is the total accessible transform pool capacity in 48-byte 3D records, not a per-view visible count. [param command_byte_offset] is 4-byte aligned and selects one 20-byte indexed indirect command. The caller supplies the mesh-compatible index count and offsets. Its [code]firstInstance[/code] indexes the global transform pool, including when GPU generated. Shader [code]INSTANCE_ID[/code] follows this global pool index, rather than starting at zero for each view; custom animation and VAT shaders must use global indexing or an explicit instance-ID indirection. The caller must ensure [code]firstInstance + instanceCount &lt;= pool_record_capacity[/code] and guard all output writes; commands are never read back for validation.
+				CPU instance setters/getters, buffer uploads/readback, visible-count changes, physics interpolation, mesh replacement, and engine-managed motion history are unavailable while attached. Motion vectors, TAA, and compositor motion requirements must remain disabled for the entire binding lifetime. The rendering method must stay unchanged. The caller must keep the input mesh resource immutable, including in-place surface, LOD, and shadow-mesh changes that bypass MultiMesh mesh assignment. Existing buffer RID getters expose the borrowed buffers; never free them as view-owned resources. The caller must detach every borrower before freeing or replacing its buffers, and preserve resources until recorded rendering dependencies are safely retired. No ownership is transferred.
+			</description>
+		</method>
 		<method name="multimesh_create">
 			<return type="RID" />
 			<description>
@@ -2720,6 +2733,13 @@
 				Once finished with your RID, you will want to free the RID using the RenderingServer's [method free_rid] method.
 				To place in a scene, attach this multimesh to an instance using [method instance_set_base] using the returned RID.
 				[b]Note:[/b] The equivalent resource is [MultiMesh].
+			</description>
+		</method>
+		<method name="multimesh_detach_shared_buffers">
+			<return type="void" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Detaches shared storage without freeing either caller-owned buffer. Leaves an empty ordinary MultiMesh, preserving its mesh and custom bounds. Calling on an ordinary MultiMesh is a no-op. MultiMesh destruction also detaches borrowed storage. Ordinary indirect initialization behavior is unchanged.
 			</description>
 		</method>
 		<method name="multimesh_get_aabb" qualifiers="const">
@@ -2878,6 +2898,13 @@
 			<description>
 				Prevents physics interpolation for all instances during the current physics tick.
 				This is useful when moving all instances to new locations, to give instantaneous changes rather than interpolation from the previous locations.
+			</description>
+		</method>
+		<method name="multimesh_is_using_shared_buffers" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Returns whether the MultiMesh currently borrows externally owned transform and indirect-command buffers.
 			</description>
 		</method>
 		<method name="multimesh_set_buffer">
