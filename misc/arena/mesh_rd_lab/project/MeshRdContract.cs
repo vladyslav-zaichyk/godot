@@ -203,11 +203,11 @@ public partial class MeshRdContract : Node
     byte[][] ExpectedProbeStreams()
     {
         var format = (RenderingServer.ArrayFormat)(ulong)_probe!.SurfaceGetFormat(0);
-        int vertexStride = RenderingServer.MeshSurfaceGetFormatVertexStride(format, 4);
-        int colorStride = RenderingServer.MeshSurfaceGetFormatAttributeStride(format, 4);
-        int skinStride = RenderingServer.MeshSurfaceGetFormatSkinStride(format, 4);
-        int indexStride = RenderingServer.MeshSurfaceGetFormatIndexStride(format, 4);
-        int Offset(Mesh.ArrayType array) => RenderingServer.MeshSurfaceGetFormatOffset(format, 4, (int)array);
+        int vertexStride = checked((int)RenderingServer.MeshSurfaceGetFormatVertexStride(format, 4));
+        int colorStride = checked((int)RenderingServer.MeshSurfaceGetFormatAttributeStride(format, 4));
+        int skinStride = checked((int)RenderingServer.MeshSurfaceGetFormatSkinStride(format, 4));
+        int indexStride = checked((int)RenderingServer.MeshSurfaceGetFormatIndexStride(format, 4));
+        int Offset(Mesh.ArrayType array) => checked((int)RenderingServer.MeshSurfaceGetFormatOffset(format, 4, (int)array));
         Check(vertexStride == 12 && colorStride == 4 && skinStride == 16 && indexStride == 2 &&
             Offset(Mesh.ArrayType.Vertex) == 0 && Offset(Mesh.ArrayType.Color) == 0 &&
             Offset(Mesh.ArrayType.Bones) == 0 && Offset(Mesh.ArrayType.Weights) == 8 &&
@@ -230,9 +230,9 @@ public partial class MeshRdContract : Node
         Check(GetStreams(_mesh!).SequenceEqual(streams), "Getter identity changed without a mesh change.");
         _vertex = streams[0]; _index = streams[3];
         var format = (RenderingServer.ArrayFormat)(ulong)_mesh!.SurfaceGetFormat(0);
-        _vertexStride = RenderingServer.MeshSurfaceGetFormatVertexStride(format, 4);
-        _vertexOffset = RenderingServer.MeshSurfaceGetFormatOffset(format, 4, (int)Mesh.ArrayType.Vertex);
-        _indexStride = RenderingServer.MeshSurfaceGetFormatIndexStride(format, 4);
+        _vertexStride = checked((int)RenderingServer.MeshSurfaceGetFormatVertexStride(format, 4));
+        _vertexOffset = checked((int)RenderingServer.MeshSurfaceGetFormatOffset(format, 4, (int)Mesh.ArrayType.Vertex));
+        _indexStride = checked((int)RenderingServer.MeshSurfaceGetFormatIndexStride(format, 4));
         Check(((ulong)format & (ulong)Mesh.ArrayFormat.FlagUseStorageBuffer) != 0 && _vertexStride == 12 && _vertexOffset == 0 && _indexStride == 2,
             "The narrow float3 / uint16 fixture ABI differs from queried layout.");
         Check(RenderingServer.MeshSurfaceGetFormatNormalTangentStride(format, 4) == 0 &&
