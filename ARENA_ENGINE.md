@@ -58,6 +58,13 @@ as versioned Release assets; CI artifacts are temporary candidates. Verify a
 bundle's SHA-256 manifest before use. Other OS/architecture/backend combinations
 need separate builds and qualification.
 
+Run `python verify_bundle.py .` inside an extracted bundle before use. To assemble
+one from hosted CI artifacts, use `tools/arena/package_windows.py` with the editor
+artifact, native receipt artifact, committed fixture, full native SHA, successful
+GPU evidence directory and a fresh output path. `--help` lists the arguments.
+Native and consumer source SHAs are recorded separately: later fixture fixes
+must not relabel an already-built native executable.
+
 For a C# consumer, put a `NuGet.Config` beside its `.csproj` before its first
 restore. Point the relative feed path at this bundle's `NuGetFeed` directory:
 
@@ -113,6 +120,15 @@ the caller-owned RID. The wrapper never frees that RID. Attachments require the
 render thread and a global-RD storage allocation of at least 16 bytes, divisible
 by 16. This contract is development scope, not a claim that v1 is already built
 or verified; consume only a matching tagged build and its API/GPU receipts.
+
+The initial candidate passed four compiler cases and a procedural RX 6800
+Vulkan/Forward+ contract: 40 lifecycle cycles, 562 numeric viewport audits,
+eight rejected attachments, four rejected material assignments, and stable
+logical RD bytes/native objects after collection and drainage. See the bundle
+receipts for exact native/consumer SHAs. This does not qualify physical VRAM,
+renderer FPS, other GPUs or gameplay. Runtime-array length currently makes
+Godot's optional re-spirv CPU optimizer fall back to the original SPIR-V;
+Vulkan execution passed, while its performance effect remains unmeasured.
 
 References: [Godot .NET builds](https://docs.godotengine.org/en/stable/engine_details/development/compiling/compiling_with_dotnet.html),
 [upstream buffer proposal](https://github.com/godotengine/godot-proposals/issues/6989),
