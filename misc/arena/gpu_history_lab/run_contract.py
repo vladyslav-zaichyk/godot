@@ -287,6 +287,7 @@ def main():
         assembly = project / '.godot/mono/temp/bin/Debug/GpuHistoryLab.dll'
         run['managed_fixture_assembly_sha256'] = sha(assembly)
         require(source_hashes(PROJECT) == before == source_hashes(project), 'Fixture source changed while building.')
+        dump(output / 'run.json', run)
         if not args.run_gpu:
             dump(output / 'acceptance.json', dict(compiled=True, gpu_executed=False, passed=None,
                  performance_qualified=False, source_sha256=before, managed_fixture_assembly_sha256=sha(assembly)))
