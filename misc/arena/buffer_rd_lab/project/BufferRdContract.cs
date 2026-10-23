@@ -67,20 +67,20 @@ public partial class BufferRdContract : Node
                 long resources = 0;
                 await OnRender(() => {
                     bytes = _rd.GetMemoryUsage(RenderingDevice.MemoryType.Buffers);
-                    resources = checked((long)Performance.GetMonitor(Performance.Monitor.ObjectResourceCount));
+                    resources = checked((long)Performance.GetMonitor(Performance.Monitor.ObjectCount));
                 });
                 Check(_wrappers.Count == 0 && _materials.Count == 0 && OwnedBuffers == 0, "A cycle retained owned consumers or buffers.");
                 Check(_rasterAudits - firstRaster == 13, "A cycle did not execute all thirteen numeric viewport audits.");
                 _cycles.Add(new { cycle = _currentCycle, warmup = _currentCycle < WarmupCycles,
                     checks = _checks - firstCheck, raster_audits = _rasterAudits - firstRaster,
-                    rd_logical_buffer_bytes = bytes, native_resource_count = resources,
+                    rd_logical_buffer_bytes = bytes, native_object_count = resources,
                     final_owned_buffers = OwnedBuffers, final_wrappers = _wrappers.Count, final_materials = _materials.Count });
                 if (_currentCycle >= WarmupCycles) { _settledBytes.Add(bytes); _settledResources.Add(resources); }
                 _completedCycles++;
             }
             Check(_settledBytes.Count == SettledCycles && _settledResources.Count == SettledCycles, "Incomplete settled samples.");
             Check(_settledBytes.Skip(SettledCycles / 2).Distinct().Count() == 1, "Logical RD buffer bytes did not reach an exact latter-half plateau.");
-            Check(_settledResources.Skip(SettledCycles / 2).Distinct().Count() == 1, "Native resources did not reach an exact latter-half plateau.");
+            Check(_settledResources.Skip(SettledCycles / 2).Distinct().Count() == 1, "Native objects did not reach an exact latter-half plateau.");
             Check(_wrapperCreates == _wrapperDisposes && _attachCalls == 3 * (WarmupCycles + SettledCycles), "Wrapper lifecycle conservation failed.");
             Check(_negativeAudits.Count == 8, "Incomplete rejection audit.");
         } catch (Exception exception) {
@@ -420,14 +420,14 @@ public partial class BufferRdContract : Node
             numeric_viewport_audits = _rasterAudits, numeric_pixel_samples = _pixelSamples,
             negative_audits = _negativeAudits, representative_numeric_audits = _pixelAudits, cycle_audits = _cycles,
             borrowed_identity_audits = _identityAudits,
-            settled_rd_logical_buffer_bytes = _settledBytes, settled_native_resource_counts = _settledResources,
+            settled_rd_logical_buffer_bytes = _settledBytes, settled_native_object_counts = _settledResources,
             final_owned_gpu_buffer_count = OwnedBuffers, final_owned_rd_resource_count = _owned.Count,
             final_wrapper_count = _wrappers.Count, final_material_count = _materials.Count,
             final_owned_requested_gpu_buffer_bytes = _owned.Where(item => item.kind.Contains("buffer")).Sum(item => (long)item.bytes),
             leak_growth_tolerance_bytes = 0, latter_half_resource_growth_tolerance = 0,
             max_live_positive_storage_bytes = 2 * BufferBytes,
             image_files_written = 0, performance_window_count = 0,
-            note = "Procedural quad only. GetImage bytes are a numerical oracle, never screenshots or image files. All GPU readbacks occur outside timing; no FPS qualification. Logical-byte and native-resource plateaus plus zero owned resources form a bounded lifetime screen, not physical VRAM residency proof."
+            note = "Procedural quad only. GetImage bytes are a numerical oracle, never screenshots or image files. All GPU readbacks occur outside timing; no FPS qualification. Logical-byte and native ObjectDB object plateaus plus zero owned resources form a bounded lifetime screen, not physical VRAM residency proof."
         };
         string path = Path.GetFullPath(Required("record"));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

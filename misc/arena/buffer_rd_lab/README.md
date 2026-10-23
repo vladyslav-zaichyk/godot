@@ -52,7 +52,7 @@ All material references detach before a deferred frame drain and synchronous
 caller-buffer completion readbacks. Wrapper disposal must leave caller storage
 alive. Producer uniform sets and caller storage are then freed. Every cycle
 ends with zero owned buffers/wrappers/materials. The last sixteen settled global
-logical-RD-byte and native-resource samples must plateau exactly. This is a
+logical-RD-byte and native ObjectDB object samples must plateau exactly. This is a
 bounded lifetime screen, not a physical/resident VRAM guarantee. No performance
 window, FPS claim, animation or gameplay qualification is included.
 

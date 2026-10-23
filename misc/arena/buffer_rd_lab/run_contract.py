@@ -105,7 +105,7 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
                 or any(not isinstance(value, int) or abs(value - expected_rgb[index % 3]) > 1
                        for index, value in enumerate(observed))):
             errors.append("Numerical shader output does not match its declared oracle.")
-    for field in ("settled_rd_logical_buffer_bytes", "settled_native_resource_counts"):
+    for field in ("settled_rd_logical_buffer_bytes", "settled_native_object_counts"):
         values = record.get(field, [])
         if (len(values) != 32 or any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in values)
                 or len(set(values[16:])) != 1):
@@ -115,7 +115,7 @@ def validate(record: dict, engine_hash: str, sdk_version: str) -> dict:
     return {"passed": True, "warmup_cycles": 8, "settled_cycles": 32,
             "numeric_viewport_audits": 520, "negative_attach_cases": 8,
             "final_owned_resources": 0,
-            "memory_scope": "Logical RD bytes and native-resource plateau; not physical VRAM residency.",
+            "memory_scope": "Logical RD bytes and native ObjectDB object plateau; not physical VRAM residency.",
             "performance_qualified": False}
 
 
