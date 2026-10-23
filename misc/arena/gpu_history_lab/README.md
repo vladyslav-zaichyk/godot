@@ -63,6 +63,9 @@ produce zero output. Root/deformation/camera designated components additionally
 must each lie in `[2^-8, 2^-3]` UV. All numbers, decoded current/previous native
 projection/view matrices, pose inputs, coverage weights and clip vertices are retained
 in JSON; no threshold is widened after a failure.
+The runner requires exactly 95 prepared epochs, 94 captures and 724 numerical
+samples, independently recomputes pixel-center coverage/depth, and rejects
+duplicate samples within an identity's frame.
 
 Engine.TimeScale is set to zero in this disposable process; state samples and
 camera changes are explicit. The shader never reads TIME. Captured actual scene

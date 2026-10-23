@@ -45,6 +45,37 @@ def source_hashes(root):
     return {name: sha(root / name) for name in INPUTS}
 
 
+def validate_pixel_coverage(row, current_clips):
+    require(type(row['x']) is int and type(row['y']) is int
+            and 0 <= row['x'] < 128 and 0 <= row['y'] < 64, 'Sample outside pixel grid.')
+    require(row['triangle'] in ([0, 1, 2], [0, 2, 3]), 'Unexpected fixed mesh triangle.')
+    require(len(current_clips) == 4 and all(len(q) == 4 and all(math.isfinite(v) for v in q)
+            and abs(q[3]) > 1e-8 for q in current_clips), 'Invalid current clip geometry.')
+    corners = [((q[0] / q[3] * .5 + .5) * 128, (q[1] / q[3] * .5 + .5) * 64)
+               for q in current_clips]
+    a, b, c = [corners[i] for i in row['triangle']]
+    p = row['x'] + .5, row['y'] + .5
+    sub = lambda u, v: (u[0] - v[0], u[1] - v[1])
+    cross = lambda u, v: u[0] * v[1] - u[1] * v[0]
+    area = cross(sub(b, a), sub(c, a))
+    require(abs(area) > 1e-8, 'Degenerate current triangle.')
+    first, second = cross(sub(b, p), sub(c, p)) / area, cross(sub(c, p), sub(a, p)) / area
+    weights = [first, second, 1 - first - second]
+    require(len(row['barycentric']) == 3 and min(weights) > 0
+            and all(math.isfinite(v) for v in row['barycentric'])
+            and all(abs(a - b) < 1e-5 for a, b in zip(weights, row['barycentric'])),
+            'Pixel does not reproduce current-triangle barycentrics.')
+    for u, v in ((a, b), (b, c), (c, a)):
+        edge = sub(v, u)
+        distance = abs(cross(edge, sub(p, u))) / math.hypot(*edge)
+        require(distance >= 2 - 1e-5, 'Pixel is too close to a triangle edge.')
+    depth = sum(weights[j] * current_clips[i][2] / current_clips[i][3]
+                for j, i in enumerate(row['triangle']))
+    require(math.isfinite(row['expected_depth']) and math.isfinite(row['actual_depth'])
+            and row['actual_depth'] > 0 and abs(depth - row['expected_depth']) <= 1e-5
+            and abs(depth - row['actual_depth']) <= 1e-5, 'Independent projected depth differs.')
+
+
 def validate(raw, source, sdk, capacity):
     expected = dict(contract='gpu-history-numeric-contract-v1', passed=True, engine_hash=source,
                     sdk_version=sdk, driver='vulkan', renderer='forward_plus', capacity=capacity,
@@ -53,7 +84,8 @@ def validate(raw, source, sdk, capacity):
                     gpu_buffer_readbacks=3, per_frame_gpu_readbacks=0, final_owned_rd_resource_count=0,
                     terminal_velocity_capture_readback_completed=True, image_files_written=0,
                     performance_window_count=0, performance_qualified=False,
-                    requested_history_input_bytes=144 * capacity + 84, capture_scene_bytes_per_epoch=5696)
+                    requested_history_input_bytes=144 * capacity + 84, capture_scene_bytes_per_epoch=5696,
+                    cases=95, prepared_epochs=95, committed_epochs=94, compositor_captures=94)
     for key, value in expected.items():
         require(raw.get(key) == value, 'Contract field differs: ' + key)
     require(not raw.get('failure') and raw.get('native_diagnostics') == [], 'Runtime diagnostics/failure.')
@@ -80,8 +112,10 @@ def validate(raw, source, sdk, capacity):
         require(named[name]['diagnostic'] == error and named[name]['instance_count'] == 0,
                 'Invalid current payload did not suppress the full batch.')
     pixels = raw['pixel_audits']
-    require(pixels and all(r['tolerance_uv'] == 2 ** -12 for r in pixels), 'Missing/flexible numeric budget.')
+    require(len(pixels) == 724 and all(r['tolerance_uv'] == 2 ** -12 for r in pixels),
+            'Incomplete fixed pixel ledger or flexible numeric budget.')
     counts = {}
+    sampled_pixels = set()
     nonzero = 0
     references = {}
     base_vertices = ((-.375, -.375, 0), (.375, -.375, 0), (.375, .375, 0), (-.375, .375, 0))
@@ -96,6 +130,12 @@ def validate(raw, source, sdk, capacity):
         for identity in epoch['identities']:
             clips = []
             for prefix in ('current', 'previous'):
+                require(len(epoch[prefix + '_projection']) == 16
+                        and len(epoch[prefix + '_view_transposed_3x4']) == 12
+                        and len(identity[prefix + '_pose']) == 3
+                        and len(identity[prefix + '_clip']) == 4
+                        and all(len(q) == 4 for q in identity[prefix + '_clip']),
+                        'Incomplete captured matrix/pose/clip dimensions.')
                 actual = [project(epoch[prefix + '_projection'], epoch[prefix + '_view_transposed_3x4'],
                                   identity[prefix + '_pose'], v) for v in base_vertices]
                 require(all(abs(a - b) < 1e-5 for ar, br in zip(actual, identity[prefix + '_clip']) for a, b in zip(ar, br)),
@@ -104,15 +144,20 @@ def validate(raw, source, sdk, capacity):
             references[epoch['epoch'], identity['id']] = epoch, clips
     for row in pixels:
         key = row['epoch'], row['id']
+        pixel_key = (*key, row['x'], row['y'])
+        require(pixel_key not in sampled_pixels, 'Duplicate numerical pixel sample.')
+        sampled_pixels.add(pixel_key)
         counts[key] = counts.get(key, 0) + 1
         require(0 <= row['x'] < 128 and 0 <= row['y'] < 64, 'Sample outside viewport.')
         require(len(row['barycentric']) == 3 and min(row['barycentric']) > 0
                 and abs(sum(row['barycentric']) - 1) < 1e-5, 'Invalid triangle coverage oracle.')
         require(math.isfinite(row['actual_depth']) and row['actual_depth'] > 0
                 and abs(row['actual_depth'] - row['expected_depth']) <= 1e-5, 'Independent depth coverage failed.')
+        require(len(row['actual_uv']) == 2 and len(row['expected_uv']) == 2, 'Velocity must have two components.')
         require(all(math.isfinite(v) for k in ('actual_uv', 'expected_uv') for v in row[k]), 'Nonfinite velocity.')
         require(all(abs(a - b) <= 2 ** -12 for a, b in zip(row['actual_uv'], row['expected_uv'])), 'Velocity differs.')
         epoch, clips = references[key]
+        validate_pixel_coverage(row, clips[0])
         expected = []
         for component in range(2):
             ndc = [sum(row['barycentric'][i] * cs[row['triangle'][i]][component] / cs[row['triangle'][i]][3]
