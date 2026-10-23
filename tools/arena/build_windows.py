@@ -66,6 +66,10 @@ def main():
     (nuget_config / 'NuGet.Config').write_bytes(config.read_bytes())
     record = {'source_commit': commit, 'upstream_base': PIN, 'status': status,
               'work': str(work), 'python': sys.version, 'steps': []}
+    sdk = subprocess.check_output(['dotnet', '--version'], cwd=ROOT / 'modules/mono', env=env, text=True).strip()
+    if sdk != '10.0.203':
+        raise SystemExit(f'Expected .NET SDK 10.0.203; effective SDK is {sdk}.')
+    record['effective_dotnet_sdk'] = sdk
     dump(run / 'manifest.json', record)
 
     def execute(name, command):
