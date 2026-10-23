@@ -326,6 +326,10 @@ TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Previous context is readonly 
 		"void fragment() { ALBEDO = vec3(IS_PREVIOUS_FRAME ? 1.0 : 0.0); }",
 		"void light() { DIFFUSE_LIGHT = vec3(IS_PREVIOUS_FRAME ? 1.0 : 0.0); }",
 		"bool previous() { return IS_PREVIOUS_FRAME; } void vertex() { VERTEX.x += previous() ? 1.0 : 0.0; } void fragment() { ALBEDO = vec3(previous() ? 1.0 : 0.0); }",
+		"bool previous() { return IS_PREVIOUS_FRAME; } bool nested() { return previous(); } void fragment() { ALBEDO = vec3(nested() ? 1.0 : 0.0); }",
+		"bool previous() { return IS_PREVIOUS_FRAME; } bool nested() { return previous(); } void light() { DIFFUSE_LIGHT = vec3(nested() ? 1.0 : 0.0); }",
+		"void write_context(out bool context) { context = true; } bool previous() { write_context(IS_PREVIOUS_FRAME); return false; } void vertex() { VERTEX.x += previous() ? 1.0 : 0.0; }",
+		"void write_context(inout bool context) { context = !context; } bool previous() { write_context(IS_PREVIOUS_FRAME); return false; } void vertex() { VERTEX.x += previous() ? 1.0 : 0.0; }",
 	};
 	for (const char *body : invalid_bodies) {
 		INFO(body);
@@ -334,6 +338,8 @@ TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Previous context is readonly 
 	}
 	ShaderLanguage language;
 	CHECK(language.compile("shader_type spatial; render_mode shader_driven_instances, shader_driven_motion_vectors; bool previous() { return IS_PREVIOUS_FRAME; } void vertex() { VERTEX.x += previous() ? 1.0 : 0.0; }", spatial_compile_info()) == OK);
+	CHECK(language.compile("shader_type spatial; render_mode shader_driven_instances, shader_driven_motion_vectors; bool previous() { return IS_PREVIOUS_FRAME; } bool nested() { return previous(); } void vertex() { VERTEX.x += nested() ? 1.0 : 0.0; }", spatial_compile_info()) == OK);
+	CHECK(language.compile("shader_type spatial; render_mode shader_driven_instances, shader_driven_motion_vectors; bool previous() { return IS_PREVIOUS_FRAME; } float previous(float value) { return value; } void vertex() { VERTEX.x += previous() ? 1.0 : 0.0; } void fragment() { ALBEDO = vec3(previous(1.0)); }", spatial_compile_info()) == OK);
 }
 
 TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Shader history requires independent backend permission") {

@@ -1016,6 +1016,8 @@ private:
 		StringName name;
 		List<Pair<StringName, Item>> uses_restricted_items;
 		List<CallInfo *> calls;
+		bool uses_vertex_motion_context = false;
+		TkPos vertex_motion_context_pos;
 	};
 
 	RBMap<StringName, CallInfo> calls_info;
