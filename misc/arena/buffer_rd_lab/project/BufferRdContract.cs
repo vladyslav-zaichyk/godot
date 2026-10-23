@@ -200,7 +200,8 @@ public partial class BufferRdContract : Node
     {
         using var uniform = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 0 };
         uniform.AddId(storage);
-        using var uniforms = new Godot.Collections.Array<RDUniform> { uniform };
+        var uniforms = new Godot.Collections.Array<RDUniform> { uniform };
+        using var uniformsLifetime = (Godot.Collections.Array)uniforms;
         return Own(_rd.UniformSetCreate(uniforms, _producerShader, 0), "compute_uniform_set");
     }
 
