@@ -1,0 +1,49 @@
+#version 450
+layout(local_size_x = 64) in;
+layout(set=0,binding=0,std430) buffer Current { uvec4 data[]; } current_pose;
+layout(set=0,binding=1,std430) buffer Previous { uvec4 data[]; } previous_pose;
+layout(set=0,binding=2,std430) buffer Lifecycle { uvec4 data[]; } lifecycle;
+layout(set=0,binding=3,std430) buffer Header { uvec4 data[]; } header;
+layout(set=0,binding=4,std430) buffer IDs { uint data[]; } ids;
+layout(set=0,binding=5,std430) buffer Command { uint data[]; } command;
+layout(set=0,binding=6,std430) buffer Diagnostic { uint data[]; } diagnostic;
+// 128 bytes, fixed capacity <=64. All actual writes have bounds guards.
+layout(push_constant,std430) uniform Params { uvec4 a; uvec4 b; uvec4 c; uvec4 d;
+    vec4 pose7; vec4 pose2; uvec4 e; uvec4 f; } pc;
+void main() {
+    uint id=gl_GlobalInvocationID.x;
+    uint capacity=pc.a.z;
+    if (id>=capacity || capacity>64u || current_pose.data.length()<capacity*4u ||
+        previous_pose.data.length()<capacity*4u || lifecycle.data.length()<capacity) return;
+    uint base=id*4u;
+    uvec4 old=lifecycle.data[id];
+    vec4 pose=id==2u ? pc.pose2 : pc.pose7;
+    uint generation=id==2u ? pc.c.y : pc.c.x;
+    uint continuity=id==2u ? pc.c.w : pc.c.z;
+    if (id!=0u && id!=2u && id!=7u) { generation=0u; pose=vec4(1000.0,1000.0,0.0,0.0); }
+    current_pose.data[base]=floatBitsToUint(vec4(1.0,0.0,0.0,pose.x));
+    current_pose.data[base+1u]=floatBitsToUint(vec4(0.0,1.0,0.0,pose.y));
+    current_pose.data[base+2u]=floatBitsToUint(vec4(0.0,0.0,1.0,0.0));
+    current_pose.data[base+3u]=uvec4(generation,pc.d.x,floatBitsToUint(pose.z),pc.a.x);
+    lifecycle.data[id]=uvec4(pc.a.w,pc.b.x!=0u ? pc.a.w : old.x,
+        continuity,pc.b.x!=0u ? continuity : old.z);
+    if (pc.d.y!=0u && (id==7u || id==2u || id==0u)) {
+        previous_pose.data[base+3u].w=0u; // Deliberately stale history must fall back.
+        previous_pose.data[base].w=floatBitsToUint(100.0);
+    }
+    if (id==0u) {
+        if (header.data.length()<1 || ids.data.length()<8 || command.data.length()<9 || diagnostic.data.length()<4) return;
+        header.data[0]=uvec4(pc.a.x,pc.b.x!=0u ? pc.a.x : pc.a.y,capacity,0xe8000001u);
+        for(uint k=0u;k<8u;k++) ids.data[k]=0xffffffffu;
+        uint first=3u, requested=pc.b.w, error=0u;
+        if (requested>8u-first) error|=1u;
+        if (pc.b.y>=capacity || (requested>1u && pc.b.z>=capacity)) error|=2u;
+        if (generation==0u || pc.c.y==0u) error|=4u;
+        if (error==0u) { ids.data[first]=pc.b.y; if(requested>1u) ids.data[first+1u]=pc.b.z; }
+        for(uint k=0u;k<4u;k++) command.data[k]=0xc0ffee00u+k;
+        command.data[4]=6u; command.data[5]=error==0u ? requested : 0u;
+        command.data[6]=0u; command.data[7]=0u; command.data[8]=first;
+        diagnostic.data[0]=error; diagnostic.data[1]=pc.a.x;
+        diagnostic.data[2]=requested; diagnostic.data[3]=error==0u ? requested : 0u;
+    }
+}

@@ -6667,6 +6667,11 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 						_set_error(vformat(RTR("Can't use function as identifier: '%s'."), String(identifier)));
 						return nullptr;
 					}
+					if (ident_type == IDENTIFIER_BUILTIN_VAR && identifier == "IS_PREVIOUS_FRAME") {
+						CallInfo &call = calls_info[current_function];
+						call.uses_vertex_motion_context = true;
+						call.vertex_motion_context_pos = _get_tkpos();
+					}
 #ifdef DEBUG_ENABLED
 					if (check_warnings) {
 						StringName func_name;
@@ -10814,6 +10819,10 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 				FunctionInfo builtins;
 				if (p_functions.has(name)) {
 					builtins = p_functions[name];
+				} else if (p_functions.has("vertex") && p_functions["vertex"].built_ins.has("IS_PREVIOUS_FRAME")) {
+					// Helpers may inspect the vertex context. Validate their complete call
+					// graph below so fragment/light cannot reach it indirectly.
+					builtins.built_ins.insert("IS_PREVIOUS_FRAME", p_functions["vertex"].built_ins["IS_PREVIOUS_FRAME"]);
 				}
 
 				if (p_functions.has("global")) { // Adds global variables: 'TIME'
@@ -11192,6 +11201,30 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 		}
 
 		tk = _get_token();
+	}
+	for (const char *entry_point : { "fragment", "light" }) {
+		if (!calls_info.has(entry_point)) {
+			continue;
+		}
+		Vector<const CallInfo *> pending;
+		HashSet<const CallInfo *> visited;
+		pending.push_back(&calls_info[entry_point]);
+		while (!pending.is_empty()) {
+			const CallInfo *call = pending[pending.size() - 1];
+			pending.resize(pending.size() - 1);
+			if (visited.has(call)) {
+				continue;
+			}
+			visited.insert(call);
+			if (call->uses_vertex_motion_context) {
+				_set_tkpos(call->vertex_motion_context_pos);
+				_set_error(vformat(RTR("'%s' is only available in vertex evaluation and cannot be reached from '%s'."), "IS_PREVIOUS_FRAME", entry_point));
+				return ERR_PARSE_ERROR;
+			}
+			for (const CallInfo *dependency : call->calls) {
+				pending.push_back(dependency);
+			}
+		}
 	}
 	uint32_t varying_index = base_varying_index;
 	uint32_t max_varyings = 31;

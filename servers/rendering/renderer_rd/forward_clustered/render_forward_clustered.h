@@ -227,6 +227,7 @@ private:
 		PassMode pass_mode = PASS_MODE_COLOR;
 		uint32_t color_pass_flags = 0;
 		bool no_gi = false;
+		bool motion_vectors_required = false; // Demand of this view, including depth passes.
 		uint32_t view_count = 1;
 		RID render_pass_uniform_set;
 		bool force_wireframe = false;
@@ -238,7 +239,7 @@ private:
 		bool use_directional_soft_shadow = false;
 		SceneShaderForwardClustered::ShaderSpecialization base_specialization = {};
 
-		RenderListParameters(GeometryInstanceSurfaceDataCache **p_elements, RenderElementInfo *p_element_info, int p_element_count, bool p_reverse_cull, PassMode p_pass_mode, uint32_t p_color_pass_flags, bool p_no_gi, bool p_use_directional_soft_shadows, RID p_render_pass_uniform_set, bool p_force_wireframe = false, const Vector2 &p_uv_offset = Vector2(), float p_lod_distance_multiplier = 0.0, float p_screen_mesh_lod_threshold = 0.0, uint32_t p_view_count = 1, uint32_t p_element_offset = 0, SceneShaderForwardClustered::ShaderSpecialization p_base_specialization = {}) {
+		RenderListParameters(GeometryInstanceSurfaceDataCache **p_elements, RenderElementInfo *p_element_info, int p_element_count, bool p_reverse_cull, PassMode p_pass_mode, uint32_t p_color_pass_flags, bool p_no_gi, bool p_use_directional_soft_shadows, RID p_render_pass_uniform_set, bool p_force_wireframe = false, const Vector2 &p_uv_offset = Vector2(), float p_lod_distance_multiplier = 0.0, float p_screen_mesh_lod_threshold = 0.0, uint32_t p_view_count = 1, uint32_t p_element_offset = 0, SceneShaderForwardClustered::ShaderSpecialization p_base_specialization = {}, bool p_motion_vectors_required = false) {
 			elements = p_elements;
 			element_info = p_element_info;
 			element_count = p_element_count;
@@ -246,6 +247,7 @@ private:
 			pass_mode = p_pass_mode;
 			color_pass_flags = p_color_pass_flags;
 			no_gi = p_no_gi;
+			motion_vectors_required = p_motion_vectors_required;
 			view_count = p_view_count;
 			render_pass_uniform_set = p_render_pass_uniform_set;
 			force_wireframe = p_force_wireframe;
@@ -568,6 +570,7 @@ private:
 		bool store_transform_cache = true;
 		RID transforms_uniform_set;
 		bool shader_driven_instances = false;
+		bool shader_driven_motion_vectors = false;
 		bool shader_driven_material_warning = false;
 		bool shader_driven_motion_warning = false;
 		bool shader_driven_mesh_warning = false;

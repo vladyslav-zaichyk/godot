@@ -1,0 +1,15 @@
+#version 450
+layout(local_size_x=8,local_size_y=8) in;
+layout(set=0,binding=0) uniform sampler2D velocity;
+layout(set=0,binding=1,std430) buffer Ledger { uvec4 samples[]; } ledger;
+layout(set=0,binding=2) uniform sampler2D depth;
+layout(push_constant,std430) uniform Params { uint index; uint epoch; uint width; uint height; } pc;
+void main() {
+    uvec2 xy=gl_GlobalInvocationID.xy;
+    if (xy.x>=pc.width || xy.y>=pc.height) return;
+    uint offset=(pc.index*pc.height+xy.y)*pc.width+xy.x;
+    if(offset>=ledger.samples.length()) return;
+    vec2 v=texelFetch(velocity,ivec2(xy),0).xy;
+    ledger.samples[offset]=uvec4(floatBitsToUint(v.x),floatBitsToUint(v.y),pc.epoch,
+        floatBitsToUint(texelFetch(depth,ivec2(xy),0).r));
+}

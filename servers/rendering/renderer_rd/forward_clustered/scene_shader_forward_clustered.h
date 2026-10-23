@@ -270,6 +270,7 @@ public:
 		bool writes_modelview_or_projection = false;
 		bool uses_world_coordinates = false;
 		bool shader_driven_instances = false;
+		bool shader_driven_motion_vectors = false;
 		bool uses_screen_texture_mipmaps = false;
 		bool uses_z_clip_scale = false;
 		RSE::CullMode cull_mode = RSE::CULL_MODE_DISABLED;

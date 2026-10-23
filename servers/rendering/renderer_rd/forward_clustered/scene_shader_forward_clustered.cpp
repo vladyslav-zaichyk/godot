@@ -47,6 +47,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	uniforms.clear();
 	buffer_uniforms.clear();
 	shader_driven_instances = false;
+	shader_driven_motion_vectors = false;
 	_clear_vertex_input_mask_cache();
 
 	if (code.is_empty()) {
@@ -98,6 +99,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	ShaderCompiler::IdentifierActions actions;
 	actions.allow_readonly_buffers = OS::get_singleton()->get_current_rendering_driver_name() == "vulkan";
 	actions.allow_shader_driven_instances = actions.allow_readonly_buffers;
+	actions.allow_shader_driven_motion_vectors = actions.allow_readonly_buffers;
 	actions.entry_point_stages["vertex"] = ShaderCompiler::STAGE_VERTEX;
 	actions.entry_point_stages["fragment"] = ShaderCompiler::STAGE_FRAGMENT;
 	actions.entry_point_stages["light"] = ShaderCompiler::STAGE_FRAGMENT;
@@ -127,6 +129,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	actions.render_mode_flags["particle_trails"] = &uses_particle_trails;
 	actions.render_mode_flags["world_vertex_coords"] = &uses_world_coordinates;
 	actions.render_mode_flags["shader_driven_instances"] = &shader_driven_instances;
+	actions.render_mode_flags["shader_driven_motion_vectors"] = &shader_driven_motion_vectors;
 
 	actions.usage_flag_pointers["ALPHA"] = &uses_alpha;
 	actions.usage_flag_pointers["ALPHA_SCISSOR_THRESHOLD"] = &uses_alpha_clip;
@@ -741,6 +744,7 @@ void SceneShaderForwardClustered::init(const String p_defines) {
 		//builtins
 
 		actions.renames["TIME"] = "global_time";
+		actions.renames["IS_PREVIOUS_FRAME"] = "godot_is_previous_frame";
 		actions.renames["EXPOSURE"] = "(1.0 / scene_data_block.data.emissive_exposure_normalization)";
 		actions.renames["PI"] = String::num(Math::PI);
 		actions.renames["TAU"] = String::num(Math::TAU);

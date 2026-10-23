@@ -1630,6 +1630,7 @@ Error MeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transf
 	_multimesh_clear_shared_uniform_sets(multimesh);
 	multimesh->shared_buffers = true;
 	multimesh->shader_driven = false;
+	multimesh->shader_motion_vectors = false;
 	multimesh->buffer = p_transform_buffer;
 	multimesh->command_buffer = p_indirect_command_buffer;
 	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
@@ -1651,7 +1652,7 @@ Error MeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transf
 	return OK;
 }
 
-Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) {
+Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	if (!multimesh) {
 		return ERR_INVALID_PARAMETER;
@@ -1683,7 +1684,7 @@ Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_dr
 	if (!multimesh->shared_buffers && (multimesh->instances != 0 || multimesh->buffer.is_valid() || multimesh->command_buffer.is_valid())) {
 		return ERR_ALREADY_IN_USE;
 	}
-	if (RSG::viewport->get_num_viewports_with_motion_vectors() > 0 || RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() > 0) {
+	if (!p_use_shader_motion_vectors && (RSG::viewport->get_num_viewports_with_motion_vectors() > 0 || RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() > 0)) {
 		return ERR_UNAVAILABLE;
 	}
 	// Borrow only the command range. No transform allocation, upload or contents readback.
@@ -1691,6 +1692,7 @@ Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_dr
 	_multimesh_clear_shared_uniform_sets(multimesh);
 	multimesh->shared_buffers = true;
 	multimesh->shader_driven = true;
+	multimesh->shader_motion_vectors = p_use_shader_motion_vectors;
 	multimesh->buffer = RID();
 	multimesh->command_buffer = p_indirect_command_buffer;
 	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
@@ -1725,6 +1727,7 @@ void MeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 	multimesh->command_byte_offset = 0;
 	multimesh->shared_buffers = false;
 	multimesh->shader_driven = false;
+	multimesh->shader_motion_vectors = false;
 	multimesh->instances = 0;
 	multimesh->visible_instances = -1;
 	multimesh->indirect = false;
@@ -1742,10 +1745,16 @@ bool MeshStorage::multimesh_is_shader_driven(RID p_multimesh) const {
 	return multimesh && multimesh->shader_driven;
 }
 
+bool MeshStorage::multimesh_uses_shader_motion_vectors(RID p_multimesh) const {
+	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	return multimesh && multimesh->shader_driven && multimesh->shader_motion_vectors;
+}
+
 void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors, bool p_use_custom_data, bool p_use_indirect) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
 	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
+	multimesh->shader_motion_vectors = false;
 
 	if (multimesh->instances == p_instances && multimesh->xform_format == p_transform_format && multimesh->uses_colors == p_use_colors && multimesh->uses_custom_data == p_use_custom_data) {
 		return;

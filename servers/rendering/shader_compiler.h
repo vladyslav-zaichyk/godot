@@ -52,6 +52,7 @@ public:
 		HashMap<StringName, Stage> entry_point_stages;
 		bool allow_readonly_buffers = false;
 		bool allow_shader_driven_instances = false;
+		bool allow_shader_driven_motion_vectors = false;
 
 		HashMap<StringName, Pair<int *, int>> render_mode_values;
 		HashMap<StringName, bool *> render_mode_flags;
@@ -94,6 +95,7 @@ public:
 		bool uses_global_textures = false;
 		bool uses_fragment_time = false;
 		bool uses_vertex_time = false;
+		bool uses_previous_frame = false;
 		bool uses_screen_texture_mipmaps = false;
 		bool uses_screen_texture = false;
 		bool uses_depth_texture = false;

@@ -32,6 +32,8 @@
 
 TEST_FORCE_LINK(test_mesh_rd)
 
+#include "core/object/class_db.h"
+#include "core/object/method_bind.h"
 #include "scene/resources/mesh.h"
 #include "servers/rendering/rendering_server.h"
 
@@ -163,6 +165,24 @@ TEST_CASE("[SceneTree][Rendering][MeshRD] Storage opt-in preserves native 16 and
 		const Array restored = server->mesh_create_arrays_from_surface_data(surface);
 		CHECK(PackedInt32Array(restored[RSE::ARRAY_INDEX]) == indices);
 	}
+}
+
+TEST_CASE("[SceneTree][Rendering][MeshRD][GPUHistory] Shader history attachment preserves the four-argument source default") {
+	const MethodBind *attach = ClassDB::get_method("RenderingServer", "multimesh_attach_shared_draw_buffer");
+	REQUIRE(attach != nullptr);
+	CHECK(attach->get_argument_count() == 5);
+	CHECK(attach->get_argument_type(4) == Variant::BOOL);
+	CHECK(attach->get_default_argument_count() == 1);
+	CHECK(attach->get_default_argument(4).get_type() == Variant::BOOL);
+	CHECK_FALSE(bool(attach->get_default_argument(4)));
+	const MethodBind *query = ClassDB::get_method("RenderingServer", "multimesh_uses_shader_motion_vectors");
+	REQUIRE(query != nullptr);
+	CHECK(query->get_argument_count() == 1);
+	CHECK(query->get_return_info().type == Variant::BOOL);
+	CHECK(query->is_const());
+	RenderingServer *server = RenderingServer::get_singleton();
+	REQUIRE(server != nullptr);
+	CHECK_FALSE(server->multimesh_uses_shader_motion_vectors(RID()));
 }
 
 } // namespace TestMeshRD

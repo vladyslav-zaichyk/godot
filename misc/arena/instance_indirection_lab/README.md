@@ -177,6 +177,13 @@ for native transform semantics/ordinary materials.
 
 ## Synchronization, history and next evidence
 
+The follow-up [E8 GPU history and motion-vector contract](GPU_HISTORY_CONTRACT.md)
+defines an opt-in previous-state evaluation for shader-driven BufferRD poses.
+The isolated E8 candidate implements its opt-in API; GPU qualification remains
+pending. Default E5 motion restrictions remain in effect, and existing editor/SDK
+bundles stay unchanged. Native Mesh RD geometry overwritten in place is outside
+that contract's first phase.
+
 Existing RD reflection tracks readonly SSBO reads and compute writes
 (`rendering_device.cpp:4708`, graph dependency logic at
 `rendering_device_graph.cpp:648`). BufferRD needs no special new Vulkan barrier.
