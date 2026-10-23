@@ -46,16 +46,18 @@ static ShaderLanguage::ShaderCompileInfo spatial_compile_info() {
 	return info;
 }
 
-static void initialize_compiler(ShaderCompiler &r_compiler, ShaderCompiler::IdentifierActions &r_actions, HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &r_uniforms, bool p_allow_buffers = true, bool p_allow_shader_driven_instances = false) {
+static void initialize_compiler(ShaderCompiler &r_compiler, ShaderCompiler::IdentifierActions &r_actions, HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &r_uniforms, bool p_allow_buffers = true, bool p_allow_shader_driven_instances = false, bool p_allow_shader_motion_vectors = false) {
 	ShaderCompiler::DefaultIdentifierActions defaults;
 	defaults.base_texture_binding_index = 1;
 	defaults.texture_layout_set = 3;
 	defaults.base_uniform_string = "material.";
 	defaults.renames["INSTANCE_ID"] = "INSTANCE_INDEX";
+	defaults.renames["IS_PREVIOUS_FRAME"] = "godot_is_previous_frame";
 	r_compiler.initialize(defaults);
 	r_actions.uniforms = &r_uniforms;
 	r_actions.allow_readonly_buffers = p_allow_buffers;
 	r_actions.allow_shader_driven_instances = p_allow_shader_driven_instances;
+	r_actions.allow_shader_driven_motion_vectors = p_allow_shader_motion_vectors;
 	r_actions.entry_point_stages["vertex"] = ShaderCompiler::STAGE_VERTEX;
 	r_actions.entry_point_stages["fragment"] = ShaderCompiler::STAGE_FRAGMENT;
 }
@@ -314,6 +316,154 @@ TEST_CASE("[Rendering][ShaderLanguage][ShaderDriven] Ordinary vertex and billboa
 		REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", generated) == OK);
 		CHECK_FALSE(capable);
 		CHECK(generated.buffers.is_empty());
+	}
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Previous context is readonly and restricted to vertex evaluation") {
+	const char *invalid_bodies[] = {
+		"void vertex() { IS_PREVIOUS_FRAME = true; }",
+		"void write_context(out bool context) { context = true; } void vertex() { write_context(IS_PREVIOUS_FRAME); }",
+		"void fragment() { ALBEDO = vec3(IS_PREVIOUS_FRAME ? 1.0 : 0.0); }",
+		"void light() { DIFFUSE_LIGHT = vec3(IS_PREVIOUS_FRAME ? 1.0 : 0.0); }",
+		"bool previous() { return IS_PREVIOUS_FRAME; } void vertex() { VERTEX.x += previous() ? 1.0 : 0.0; } void fragment() { ALBEDO = vec3(previous() ? 1.0 : 0.0); }",
+	};
+	for (const char *body : invalid_bodies) {
+		INFO(body);
+		ShaderLanguage language;
+		CHECK(language.compile(String("shader_type spatial; render_mode shader_driven_instances, shader_driven_motion_vectors;\n") + body, spatial_compile_info()) == ERR_PARSE_ERROR);
+	}
+	ShaderLanguage language;
+	CHECK(language.compile("shader_type spatial; render_mode shader_driven_instances, shader_driven_motion_vectors; bool previous() { return IS_PREVIOUS_FRAME; } void vertex() { VERTEX.x += previous() ? 1.0 : 0.0; }", spatial_compile_info()) == OK);
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Shader history requires independent backend permission") {
+	const String code = "shader_type spatial; render_mode shader_driven_instances, shader_driven_motion_vectors; void vertex() { VERTEX.x += IS_PREVIOUS_FRAME ? 1.0 : 0.0; }";
+	ShaderCompiler compiler;
+	ShaderCompiler::IdentifierActions actions;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+	initialize_compiler(compiler, actions, uniforms, true, true);
+	CHECK_FALSE(actions.allow_shader_driven_motion_vectors);
+	bool history_capable = false;
+	actions.render_mode_flags["shader_driven_motion_vectors"] = &history_capable;
+	ShaderCompiler::GeneratedCode generated;
+	ERR_PRINT_OFF;
+	const Error unavailable = compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", generated);
+	ERR_PRINT_ON;
+	CHECK(unavailable == ERR_UNAVAILABLE);
+	CHECK_FALSE(history_capable);
+	CHECK(generated.code.is_empty());
+	actions.allow_shader_driven_motion_vectors = true;
+	REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", generated) == OK);
+	CHECK(history_capable);
+	CHECK(generated.uses_previous_frame);
+	CHECK_FALSE(generated.uses_vertex_time);
+	CHECK_FALSE(generated.uses_fragment_time);
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Previous context requires both explicit spatial modes") {
+	const char *codes[] = {
+		"shader_type spatial; void vertex() { VERTEX.x += IS_PREVIOUS_FRAME ? 1.0 : 0.0; }",
+		"shader_type spatial; render_mode shader_driven_instances; void vertex() { VERTEX.x += IS_PREVIOUS_FRAME ? 1.0 : 0.0; }",
+		"shader_type spatial; bool previous() { return IS_PREVIOUS_FRAME; } void vertex() { VERTEX.x += previous() ? 1.0 : 0.0; }",
+		"shader_type spatial; render_mode shader_driven_motion_vectors; void vertex() { VERTEX.x += IS_PREVIOUS_FRAME ? 1.0 : 0.0; }",
+		"shader_type spatial; render_mode shader_driven_motion_vectors; void vertex() { VERTEX *= 2.0; }",
+	};
+	for (const char *code : codes) {
+		INFO(code);
+		ShaderCompiler compiler;
+		ShaderCompiler::IdentifierActions actions;
+		HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+		initialize_compiler(compiler, actions, uniforms, true, true, true);
+		ShaderCompiler::GeneratedCode generated;
+		ERR_PRINT_OFF;
+		const Error unavailable = compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", generated);
+		ERR_PRINT_ON;
+		CHECK(unavailable == ERR_UNAVAILABLE);
+	}
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Helpers select history without remapping the current draw identity") {
+	ShaderCompiler compiler;
+	ShaderCompiler::IdentifierActions actions;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+	initialize_compiler(compiler, actions, uniforms, true, true, true);
+	const String code = "shader_type spatial;\n"
+			"render_mode shader_driven_instances, shader_driven_motion_vectors, skip_vertex_transform;\n"
+			"uniform readonly_buffer visible_ids;\n"
+			"uniform readonly_buffer current_poses;\n"
+			"uniform readonly_buffer previous_poses;\n"
+			"vec3 pose(uint stable_id) { return uintBitsToFloat(IS_PREVIOUS_FRAME ? buffer_load(previous_poses, stable_id) : buffer_load(current_poses, stable_id)).xyz; }\n"
+			"void vertex() { uint slot = uint(INSTANCE_ID); uvec4 ids = buffer_load(visible_ids, slot >> 2u); uint stable_id = ids[int(slot & 3u)]; VERTEX = (MODELVIEW_MATRIX * vec4(pose(stable_id), 1.0)).xyz; }\n";
+	ShaderCompiler::GeneratedCode generated;
+	REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", generated) == OK);
+	CHECK(generated.uses_previous_frame);
+	REQUIRE(generated.buffers.size() == 3);
+	CHECK(generated.uniform_offsets.is_empty());
+	CHECK(generated.stage_globals[ShaderCompiler::STAGE_VERTEX].contains("godot_is_previous_frame"));
+	CHECK(generated.stage_globals[ShaderCompiler::STAGE_VERTEX].contains("godot_buffer_load_m_previous_poses"));
+	CHECK(generated.stage_globals[ShaderCompiler::STAGE_VERTEX].contains("godot_buffer_load_m_current_poses"));
+	CHECK_FALSE(generated.stage_globals[ShaderCompiler::STAGE_FRAGMENT].contains("godot_is_previous_frame"));
+	REQUIRE(generated.code.has("vertex"));
+	CHECK(generated.code["vertex"].count("INSTANCE_INDEX") == 1);
+	CHECK(generated.code["vertex"].count("godot_buffer_load_m_visible_ids") == 1);
+	CHECK_FALSE(generated.uses_vertex_time);
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Analytic capability does not require reading the context") {
+	ShaderCompiler compiler;
+	ShaderCompiler::IdentifierActions actions;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+	initialize_compiler(compiler, actions, uniforms, false, true, true);
+	bool history_capable = false;
+	actions.render_mode_flags["shader_driven_motion_vectors"] = &history_capable;
+	ShaderCompiler::GeneratedCode generated;
+	REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, "shader_type spatial; render_mode shader_driven_instances, shader_driven_motion_vectors; void vertex() { VERTEX *= 2.0; }", &actions, "", generated) == OK);
+	CHECK(history_capable);
+	CHECK_FALSE(generated.uses_previous_frame);
+	CHECK(generated.buffers.is_empty());
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Permission and context metadata do not leak between compiler clients") {
+	const String code = "shader_type spatial; render_mode shader_driven_instances, shader_driven_motion_vectors; void vertex() { VERTEX.x += IS_PREVIOUS_FRAME ? 1.0 : 0.0; }";
+	ShaderCompiler compiler;
+	ShaderCompiler::IdentifierActions allowed;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> allowed_uniforms;
+	initialize_compiler(compiler, allowed, allowed_uniforms, true, true, true);
+	ShaderCompiler::GeneratedCode generated;
+	REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, code, &allowed, "", generated) == OK);
+	CHECK(generated.uses_previous_frame);
+	ShaderCompiler::IdentifierActions ordinary;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> ordinary_uniforms;
+	initialize_compiler(compiler, ordinary, ordinary_uniforms, false);
+	REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, "shader_type spatial; void vertex() { VERTEX *= 2.0; }", &ordinary, "", generated) == OK);
+	CHECK_FALSE(generated.uses_previous_frame);
+	CHECK(generated.buffers.is_empty());
+	ERR_PRINT_OFF;
+	const Error unavailable = compiler.compile(RSE::SHADER_SPATIAL, code, &ordinary, "", generated);
+	ERR_PRINT_ON;
+	CHECK(unavailable == ERR_UNAVAILABLE);
+	CHECK_FALSE(generated.uses_previous_frame);
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][GPUHistory] Canvas and particles cannot opt into spatial history") {
+	const struct {
+		RSE::ShaderMode mode;
+		const char *code;
+	} cases[] = {
+		{ RSE::SHADER_CANVAS_ITEM, "shader_type canvas_item; render_mode shader_driven_motion_vectors;" },
+		{ RSE::SHADER_CANVAS_ITEM, "shader_type canvas_item; void vertex() { VERTEX.x += IS_PREVIOUS_FRAME ? 1.0 : 0.0; }" },
+		{ RSE::SHADER_PARTICLES, "shader_type particles; render_mode shader_driven_motion_vectors;" },
+		{ RSE::SHADER_PARTICLES, "shader_type particles; void process() { ACTIVE = IS_PREVIOUS_FRAME; }" },
+	};
+	for (const auto &test : cases) {
+		INFO(test.code);
+		ShaderLanguage::ShaderCompileInfo info;
+		info.functions = ShaderTypes::get_singleton()->get_functions(test.mode);
+		info.render_modes = ShaderTypes::get_singleton()->get_modes(test.mode);
+		info.stencil_modes = ShaderTypes::get_singleton()->get_stencil_modes(test.mode);
+		info.shader_types = ShaderTypes::get_singleton()->get_types();
+		ShaderLanguage language;
+		CHECK(language.compile(test.code, info) == ERR_PARSE_ERROR);
 	}
 }
 

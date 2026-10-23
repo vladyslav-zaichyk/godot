@@ -126,6 +126,7 @@ layout(set = MATERIAL_UNIFORM_SET, binding = 0, std140) uniform MaterialUniforms
 #endif
 
 float global_time;
+bool godot_is_previous_frame;
 
 #ifdef MODE_DUAL_PARABOLOID
 
@@ -802,6 +803,7 @@ void main() {
 			prev_vertex);
 
 	global_time = scene_data_block.prev_data.time;
+	godot_is_previous_frame = true;
 	vertex_shader(prev_vertex,
 #ifdef NORMAL_USED
 			prev_normal,
@@ -845,6 +847,7 @@ void main() {
 
 	// Current vertex.
 	global_time = scene_data_block.data.time;
+	godot_is_previous_frame = false;
 	vertex_shader(vertex,
 #ifdef NORMAL_USED
 			normal,

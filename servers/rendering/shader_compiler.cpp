@@ -919,6 +919,9 @@ String ShaderCompiler::_dump_node_code(const SL::Node *p_node, int p_level, Gene
 		case SL::Node::NODE_TYPE_VARIABLE: {
 			SL::VariableNode *vnode = (SL::VariableNode *)p_node;
 			bool use_fragment_varying = false;
+			if (!vnode->is_local && vnode->name == "IS_PREVIOUS_FRAME") {
+				r_gen_code.uses_previous_frame = true;
+			}
 
 			if (!vnode->is_local && !(p_actions.entry_point_stages.has(current_func_name) && p_actions.entry_point_stages[current_func_name] == STAGE_VERTEX)) {
 				if (p_assigning) {
@@ -1579,6 +1582,7 @@ ShaderLanguage::DataType ShaderCompiler::_get_global_shader_uniform_type(const S
 
 Error ShaderCompiler::compile(RSE::ShaderMode p_mode, const String &p_code, IdentifierActions *p_actions, const String &p_path, GeneratedCode &r_gen_code) {
 	r_gen_code.buffers.clear();
+	r_gen_code.uses_previous_frame = false;
 	SL::ShaderCompileInfo info;
 	info.functions = ShaderTypes::get_singleton()->get_functions(p_mode);
 	info.render_modes = ShaderTypes::get_singleton()->get_modes(p_mode);
@@ -1673,6 +1677,11 @@ Error ShaderCompiler::compile(RSE::ShaderMode p_mode, const String &p_code, Iden
 		ERR_FAIL_COND_V_MSG(render_mode == "shader_driven_instances" && (!p_actions->allow_shader_driven_instances || p_mode != RSE::SHADER_SPATIAL), ERR_UNAVAILABLE,
 				"shader_driven_instances requires the Vulkan Forward+ renderer.");
 	}
+	const bool shader_motion_vectors = parser.get_shader()->render_modes.has("shader_driven_motion_vectors");
+	ERR_FAIL_COND_V_MSG(shader_motion_vectors && (!p_actions->allow_shader_driven_motion_vectors || p_mode != RSE::SHADER_SPATIAL), ERR_UNAVAILABLE,
+			"shader_driven_motion_vectors requires the Vulkan Forward+ renderer.");
+	ERR_FAIL_COND_V_MSG(shader_motion_vectors && !parser.get_shader()->render_modes.has("shader_driven_instances"), ERR_UNAVAILABLE,
+			"shader_driven_motion_vectors requires render_mode shader_driven_instances.");
 
 	for (const KeyValue<StringName, SL::ShaderNode::Uniform> &E : parser.get_shader()->uniforms) {
 		ERR_FAIL_COND_V_MSG(E.value.is_buffer() && (!p_actions->allow_readonly_buffers || p_mode != RSE::SHADER_SPATIAL), ERR_UNAVAILABLE,
@@ -1702,6 +1711,8 @@ Error ShaderCompiler::compile(RSE::ShaderMode p_mode, const String &p_code, Iden
 	// Return value only relevant within nested calls.
 	_ALLOW_DISCARD_ _dump_node_code(shader, 1, r_gen_code, *p_actions, actions, false);
 
+	ERR_FAIL_COND_V_MSG(r_gen_code.uses_previous_frame && !shader_motion_vectors, ERR_UNAVAILABLE,
+			"IS_PREVIOUS_FRAME requires render_mode shader_driven_instances, shader_driven_motion_vectors.");
 	return OK;
 }
 

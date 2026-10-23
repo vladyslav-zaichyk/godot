@@ -258,6 +258,7 @@ private:
 		RID command_buffer; //used if indirect setting is used
 		bool shared_buffers = false; // Attached buffers are borrowed, never owned.
 		bool shader_driven = false; // No per-instance transform storage; materials own the pose.
+		bool shader_motion_vectors = false; // Shader owns both rendered pose samples; no native history storage.
 		uint32_t command_byte_offset = 0;
 
 		bool dirty = false;
@@ -669,10 +670,11 @@ public:
 
 	virtual void _multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors = false, bool p_use_custom_data = false, bool p_use_indirect = false) override;
 	virtual Error multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) override;
-	virtual Error multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) override;
+	virtual Error multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors) override;
 	virtual void multimesh_detach_shared_buffers(RID p_multimesh) override;
 	virtual bool multimesh_is_using_shared_buffers(RID p_multimesh) const override;
 	virtual bool multimesh_is_shader_driven(RID p_multimesh) const override;
+	virtual bool multimesh_uses_shader_motion_vectors(RID p_multimesh) const override;
 
 	virtual int _multimesh_get_instance_count(RID p_multimesh) const override;
 

@@ -1,10 +1,12 @@
 # E8: GPU render-state history and motion vectors
 
-Status: design contract, 2026-10-23. Audited source:
+Status: native implementation candidate, 2026-10-24. Contract source audit:
 `820f0af33323e4871448fd940e2806930803745b` (Arena Godot 4.7.2).
-The API and fixture below are **proposed, not implemented**. This stage changes
-documentation only. Native patch, separate editor/SDK and GPU runs are later
-deliverables. Existing editor/SDK bundles are immutable.
+The opt-in API and shader context are implemented in the isolated E8 candidate.
+Its procedural consumer and separate editor/SDK are tracked by
+[E8](https://github.com/vladyslav-zaichyk/project-arena-tracking/issues/124).
+Native/managed compilation and GPU qualification are separate gates. GPU tests
+wait for the parallel renderer A/B; existing editor/SDK bundles are immutable.
 
 ## Decision and limits
 
@@ -32,7 +34,7 @@ storage. TAA/FSR2 image quality, physical VRAM, performance, lit TBN, shadows,
 transparency, MSAA and multiview require separate qualification. No multiplayer
 authority, combat or network identity semantics change.
 
-## Proposed engine API
+## Experimental engine API
 
 Append one optional argument to the existing experimental operation:
 
@@ -295,7 +297,7 @@ descriptors, diagnostic/capture outputs, allocator overhead and in-flight
 retirement. They are not resident VRAM. Production capacity, history retention
 and overflow are renderer policy.
 
-## Patch and acceptance gates (not executed by this design stage)
+## Qualification gates
 
 | Gate | Required evidence |
 | --- | --- |
