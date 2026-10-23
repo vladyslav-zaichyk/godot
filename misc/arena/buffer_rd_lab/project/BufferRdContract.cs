@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -110,6 +112,18 @@ public partial class BufferRdContract : Node
     static string SdkVersion => typeof(BufferRdContract).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
         .SingleOrDefault(item => item.Key == "GodotSdkVersion")?.Value ?? "";
     static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+    string RuntimeAssemblyHash(Assembly assembly, string expectedPath)
+    {
+        // Godot loads project assemblies from streams, so Location may be empty.
+        // Check the actual loaded module identity before hashing its known file.
+        string path = string.IsNullOrEmpty(assembly.Location) ? expectedPath : assembly.Location;
+        using var stream = File.OpenRead(path);
+        using var pe = new PEReader(stream);
+        MetadataReader metadata = pe.GetMetadataReader();
+        Check(metadata.GetGuid(metadata.GetModuleDefinition().Mvid) == assembly.ManifestModule.ModuleVersionId,
+            "Loaded managed module differs from its on-disk assembly: " + assembly.GetName().Name);
+        return Hash(path);
+    }
     int OwnedBuffers => _owned.Count(item => item.kind == "storage_buffer");
     void Check(bool condition, string reason) { _checks++; if (!condition) throw new Exception(reason); }
 
@@ -466,15 +480,17 @@ public partial class BufferRdContract : Node
     void WriteResult()
     {
         bool passed = _failure.Length == 0 && _errors.Errors == 0 && _completedCycles == WarmupCycles + SettledCycles;
-        string assembly = typeof(BufferRdContract).Assembly.Location;
-        string managedApi = typeof(Node).Assembly.Location;
+        string assembly = ProjectSettings.GlobalizePath("res://.godot/mono/temp/bin/Debug/BufferRdLab.dll");
+        string managedApi = Path.Combine(Path.GetDirectoryName(OS.GetExecutablePath())!, "GodotSharp", "Api", "Debug", "GodotSharp.dll");
         var result = new {
             contract = "buffer-rd-numeric-contract-v1", passed, failure = _failure, errors = _errors.Errors,
             total_native_error_callbacks = _errors.TotalErrors, expected_native_error_callbacks = _errors.ExpectedCallbacks,
             material_binding_guard_audits = _bindingGuardAudits,
             cycles = SettledCycles, warmup_cycles = WarmupCycles, completed_cycles = _completedCycles,
             engine = Engine.GetVersionInfo()["string"].AsString(), engine_hash = Engine.GetVersionInfo()["hash"].AsString(),
-            sdk_version = SdkVersion, managed_fixture_assembly_sha256 = Hash(assembly), managed_api_assembly_sha256 = Hash(managedApi),
+            sdk_version = SdkVersion,
+            managed_fixture_assembly_sha256 = RuntimeAssemblyHash(typeof(BufferRdContract).Assembly, assembly),
+            managed_api_assembly_sha256 = RuntimeAssemblyHash(typeof(Node).Assembly, managedApi),
             driver = RenderingServer.GetCurrentRenderingDriverName(), renderer = RenderingServer.GetCurrentRenderingMethod(),
             gpu_name = RenderingServer.GetVideoAdapterName(), checks = _checks,
             attach_ok_calls = _attachCalls, wrapper_creations = _wrapperCreates, wrapper_disposals = _wrapperDisposes,
