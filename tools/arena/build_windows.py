@@ -66,6 +66,10 @@ def main():
     (nuget_config / 'NuGet.Config').write_bytes(config.read_bytes())
     record = {'source_commit': commit, 'upstream_base': PIN, 'status': status,
               'work': str(work), 'python': sys.version, 'steps': []}
+    sdk = subprocess.check_output(['dotnet', '--version'], cwd=ROOT / 'modules/mono', env=env, text=True).strip()
+    if sdk != '10.0.203':
+        raise SystemExit(f'Expected .NET SDK 10.0.203; effective SDK is {sdk}.')
+    record['effective_dotnet_sdk'] = sdk
     dump(run / 'manifest.json', record)
 
     def execute(name, command):
@@ -99,7 +103,7 @@ def main():
                         '--godot-output-dir', ROOT / 'bin', '--godot-platform', 'windows',
                         '--push-nupkgs-local', feed])
     execute('native-contracts', [binary, '--headless', '--test',
-                                '--test-case=[AABB]*,[Transform3D]*,[Basis]*,[ShaderLanguage]*', '--no-colors'])
+                                '--test-case=[AABB]*,[Transform3D]*,[Basis]*,*[BufferRD]*', '--no-colors'])
     record['sdk_packages'] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in feed.glob('*.nupkg')}
     record['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
     record['sdk_versions'] = subprocess.check_output(['dotnet', '--list-sdks'], env=env, text=True).splitlines()

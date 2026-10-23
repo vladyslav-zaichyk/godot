@@ -50,6 +50,7 @@ public:
 
 	struct IdentifierActions {
 		HashMap<StringName, Stage> entry_point_stages;
+		bool allow_readonly_buffers = false;
 
 		HashMap<StringName, Pair<int *, int>> render_mode_values;
 		HashMap<StringName, bool *> render_mode_flags;
@@ -75,6 +76,12 @@ public:
 		};
 
 		Vector<Texture> texture_uniforms;
+
+		struct Buffer {
+			StringName name;
+			uint32_t binding = 0;
+		};
+		Vector<Buffer> buffers;
 
 		Vector<uint32_t> uniform_offsets;
 		uint32_t uniform_total_size = 0;

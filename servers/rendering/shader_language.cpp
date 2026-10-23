@@ -131,6 +131,7 @@ const char *ShaderLanguage::token_names[TK_MAX] = {
 	"TYPE_SAMPLERCUBE",
 	"TYPE_SAMPLERCUBEARRAY",
 	"TYPE_SAMPLEREXT",
+	"TYPE_READONLY_BUFFER",
 	"INTERPOLATION_FLAT",
 	"INTERPOLATION_SMOOTH",
 	"CONST",
@@ -324,6 +325,7 @@ const ShaderLanguage::KeyWord ShaderLanguage::keyword_list[] = {
 	{ TK_TYPE_SAMPLERCUBE, "samplerCube", KCF_SAMPLER_DATATYPE, {}, {} },
 	{ TK_TYPE_SAMPLERCUBEARRAY, "samplerCubeArray", KCF_SAMPLER_DATATYPE, {}, {} },
 	{ TK_TYPE_SAMPLEREXT, "samplerExternalOES", KCF_SAMPLER_DATATYPE, {}, {} },
+	{ TK_TYPE_READONLY_BUFFER, "readonly_buffer", CF_UNIFORM_TYPE, { "canvas_item", "particles", "sky", "fog" }, {} },
 
 	// interpolation qualifiers
 
@@ -1044,7 +1046,8 @@ bool ShaderLanguage::is_token_datatype(TokenType p_type) {
 			p_type == TK_TYPE_USAMPLER3D ||
 			p_type == TK_TYPE_SAMPLERCUBE ||
 			p_type == TK_TYPE_SAMPLERCUBEARRAY ||
-			p_type == TK_TYPE_SAMPLEREXT);
+			p_type == TK_TYPE_SAMPLEREXT ||
+			p_type == TK_TYPE_READONLY_BUFFER);
 }
 
 ShaderLanguage::DataType ShaderLanguage::get_token_datatype(TokenType p_type) {
@@ -1181,6 +1184,8 @@ String ShaderLanguage::get_datatype_name(DataType p_type) {
 			return "samplerCubeArray";
 		case TYPE_SAMPLEREXT:
 			return "samplerExternalOES";
+		case TYPE_READONLY_BUFFER:
+			return "readonly_buffer";
 		case TYPE_STRUCT:
 			return "struct";
 		case TYPE_MAX:
@@ -1578,6 +1583,12 @@ bool ShaderLanguage::_find_identifier(const BlockNode *p_block, bool p_allow_rea
 }
 
 bool ShaderLanguage::_validate_operator(const BlockNode *p_block, const FunctionInfo &p_function_info, OperatorNode *p_op, DataType *r_ret_type, int *r_ret_size, StringName *r_ret_struct_name) {
+	for (const Node *argument : p_op->arguments) {
+		if (argument->get_datatype() == TYPE_READONLY_BUFFER) {
+			_set_error(RTR("Operators are not supported for readonly_buffer uniforms."));
+			return false;
+		}
+	}
 	bool valid = false;
 	DataType ret_type = TYPE_VOID;
 	int ret_size = 0;
@@ -3557,6 +3568,9 @@ const ShaderLanguage::BuiltinFuncDef ShaderLanguage::builtin_func_defs[] = {
 	{ "frexp", TYPE_VEC3, { TYPE_VEC3, TYPE_IVEC3, TYPE_VOID }, { "x", "exp" }, TAG_GLOBAL, true },
 	{ "frexp", TYPE_VEC4, { TYPE_VEC4, TYPE_IVEC4, TYPE_VOID }, { "x", "exp" }, TAG_GLOBAL, true },
 
+	{ "buffer_load", TYPE_UVEC4, { TYPE_READONLY_BUFFER, TYPE_UINT, TYPE_VOID }, { "buffer", "record_index" }, TAG_GLOBAL, true },
+	{ "buffer_length", TYPE_UINT, { TYPE_READONLY_BUFFER, TYPE_VOID }, { "buffer" }, TAG_GLOBAL, true },
+
 	{ nullptr, TYPE_VOID, { TYPE_VOID }, { "" }, TAG_GLOBAL, false }
 };
 
@@ -3613,6 +3627,19 @@ bool ShaderLanguage::_validate_function_call(BlockNode *p_block, const FunctionI
 	}
 
 	int argcount = args.size();
+
+	if (name == "buffer_load" || name == "buffer_length") {
+		const int expected_arguments = name == "buffer_load" ? 2 : 1;
+		if (argcount != expected_arguments || p_func->arguments[1]->type != Node::NODE_TYPE_VARIABLE) {
+			_set_error(RTR("Buffer functions require a direct readonly_buffer uniform as their first argument."));
+			return false;
+		}
+		const StringName &buffer_name = static_cast<VariableNode *>(p_func->arguments[1])->name;
+		if (!shader->uniforms.has(buffer_name) || !shader->uniforms[buffer_name].is_buffer()) {
+			_set_error(RTR("Buffer functions require a direct readonly_buffer uniform as their first argument."));
+			return false;
+		}
+	}
 
 	if (stages) {
 		// Stage functions can be used in custom functions as well, that why need to check them all.
@@ -4145,7 +4172,9 @@ bool ShaderLanguage::_parse_function_arguments(BlockNode *p_block, const Functio
 			}
 		}
 
-		Node *arg = _parse_and_reduce_expression(p_block, p_function_info);
+		const StringName &function_name = static_cast<VariableNode *>(p_func->arguments[0])->name;
+		const bool allow_buffer_argument = p_func->arguments.size() == 1 && (function_name == "buffer_load" || function_name == "buffer_length");
+		Node *arg = _parse_and_reduce_expression(p_block, p_function_info, nullptr, allow_buffer_argument);
 
 		if (!arg) {
 			return false;
@@ -4296,7 +4325,7 @@ bool ShaderLanguage::is_float_type(DataType p_type) {
 	}
 }
 bool ShaderLanguage::is_sampler_type(DataType p_type) {
-	return p_type > TYPE_MAT4 && p_type < TYPE_STRUCT;
+	return p_type >= TYPE_SAMPLER2D && p_type <= TYPE_SAMPLEREXT;
 }
 
 bool ShaderLanguage::ShaderLanguage::is_hint_color(ShaderLanguage::ShaderNode::Uniform::Hint p_hint) {
@@ -4610,6 +4639,7 @@ Variant ShaderLanguage::constant_value_to_variant(const Vector<Scalar> &p_value,
 				// Texture types, likely not relevant here.
 				break;
 			}
+			case ShaderLanguage::TYPE_READONLY_BUFFER:
 			case ShaderLanguage::TYPE_STRUCT:
 				break;
 			case ShaderLanguage::TYPE_VOID:
@@ -5133,6 +5163,11 @@ PropertyInfo ShaderLanguage::uniform_to_property_info(const ShaderNode::Uniform 
 				pi.hint_string = "ExternalTexture";
 			}
 		} break;
+		case ShaderLanguage::TYPE_READONLY_BUFFER: {
+			pi.type = Variant::OBJECT;
+			pi.hint = PROPERTY_HINT_RESOURCE_TYPE;
+			pi.hint_string = "BufferRD";
+		} break;
 		case ShaderLanguage::TYPE_STRUCT: {
 			// FIXME: Implement this.
 		} break;
@@ -5208,6 +5243,7 @@ uint32_t ShaderLanguage::get_datatype_size(ShaderLanguage::DataType p_type) {
 			return 16;
 		case TYPE_SAMPLEREXT:
 			return 16;
+		case TYPE_READONLY_BUFFER:
 		case TYPE_STRUCT:
 			return 0;
 		case TYPE_MAX: {
@@ -5350,6 +5386,7 @@ ShaderLanguage::DataType ShaderLanguage::get_scalar_type(DataType p_type) {
 		TYPE_FLOAT,
 		TYPE_FLOAT,
 		TYPE_FLOAT,
+		TYPE_VOID, // readonly_buffer
 		TYPE_VOID,
 	};
 
@@ -5392,6 +5429,7 @@ int ShaderLanguage::get_cardinality(DataType p_type) {
 		1,
 		1,
 		1,
+		0, // readonly_buffer
 		1,
 	};
 
@@ -6101,6 +6139,10 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 				}
 
 				datatype = get_token_datatype(tk.type);
+				if (datatype == TYPE_READONLY_BUFFER) {
+					_set_error(RTR("A readonly_buffer cannot be constructed."));
+					return nullptr;
+				}
 				if (precision != PRECISION_DEFAULT && _validate_precision(datatype, precision) != OK) {
 					return nullptr;
 				}
@@ -7997,9 +8039,14 @@ ShaderLanguage::Node *ShaderLanguage::_reduce_expression(BlockNode *p_block, Sha
 	return p_node;
 }
 
-ShaderLanguage::Node *ShaderLanguage::_parse_and_reduce_expression(BlockNode *p_block, const FunctionInfo &p_function_info, const ExpressionInfo *p_previous_expression_info) {
+ShaderLanguage::Node *ShaderLanguage::_parse_and_reduce_expression(BlockNode *p_block, const FunctionInfo &p_function_info, const ExpressionInfo *p_previous_expression_info, bool p_allow_readonly_buffer) {
 	ShaderLanguage::Node *expr = _parse_expression(p_block, p_function_info, p_previous_expression_info);
 	if (!expr) { //errored
+		return nullptr;
+	}
+
+	if (expr->get_datatype() == TYPE_READONLY_BUFFER && !p_allow_readonly_buffer) {
+		_set_error(RTR("A readonly_buffer may only be used as the first argument of buffer_load() or buffer_length()."));
 		return nullptr;
 	}
 
@@ -9437,7 +9484,7 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 							return ERR_PARSE_ERROR;
 						}
 
-						if (type == TYPE_VOID || is_sampler_type(type)) {
+						if (type == TYPE_VOID || is_sampler_type(type) || type == TYPE_READONLY_BUFFER) {
 							_set_error(vformat(RTR("A '%s' data type is not allowed here."), get_datatype_name(type)));
 							return ERR_PARSE_ERROR;
 						}
@@ -9691,6 +9738,17 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 
 				type = get_token_datatype(tk.type);
 
+				if (type == TYPE_READONLY_BUFFER) {
+					if (!is_uniform || uniform_scope != ShaderNode::Uniform::SCOPE_LOCAL || (!is_shader_inc && shader_type_identifier != "spatial")) {
+						_set_error(RTR("A readonly_buffer must be a material uniform in a spatial shader."));
+						return ERR_PARSE_ERROR;
+					}
+					if (precision != PRECISION_DEFAULT) {
+						_set_error(RTR("Precision qualifiers are not supported for readonly_buffer uniforms."));
+						return ERR_PARSE_ERROR;
+					}
+				}
+
 				if (precision != PRECISION_DEFAULT && _validate_precision(type, precision) != OK) {
 					return ERR_PARSE_ERROR;
 				}
@@ -9721,6 +9779,10 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 				}
 
 				if (tk.type == TK_BRACKET_OPEN) {
+					if (type == TYPE_READONLY_BUFFER) {
+						_set_error(RTR("Arrays of readonly_buffer uniforms are not supported."));
+						return ERR_PARSE_ERROR;
+					}
 					Error error = _parse_array_size(nullptr, constants, true, nullptr, &array_size, nullptr);
 					if (error != OK) {
 						return error;
@@ -9770,6 +9832,10 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 
 					tk = _get_token();
 					if (tk.type == TK_BRACKET_OPEN) {
+						if (type == TYPE_READONLY_BUFFER) {
+							_set_error(RTR("Arrays of readonly_buffer uniforms are not supported."));
+							return ERR_PARSE_ERROR;
+						}
 						Error error = _parse_array_size(nullptr, constants, true, nullptr, &uniform.array_size, nullptr);
 						if (error != OK) {
 							return error;
@@ -9777,7 +9843,11 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 						tk = _get_token();
 					}
 
-					if (is_sampler_type(type)) {
+					if (type == TYPE_READONLY_BUFFER) {
+						uniform.order = -1;
+						uniform.texture_order = -1;
+						uniform.prop_order = prop_index++;
+					} else if (is_sampler_type(type)) {
 						if (uniform_scope == ShaderNode::Uniform::SCOPE_INSTANCE) {
 							_set_error(vformat(RTR("The '%s' qualifier is not supported for sampler types."), "SCOPE_INSTANCE"));
 							return ERR_PARSE_ERROR;
@@ -9835,6 +9905,10 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 					int custom_instance_index = -1;
 
 					if (tk.type == TK_COLON) {
+						if (type == TYPE_READONLY_BUFFER) {
+							_set_error(RTR("Hints are not supported for readonly_buffer uniforms."));
+							return ERR_PARSE_ERROR;
+						}
 						completion_type = COMPLETION_HINT;
 						completion_base = type;
 						completion_base_array = uniform.array_size > 0;
@@ -10216,6 +10290,10 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 					//reset scope for next uniform
 
 					if (tk.type == TK_OP_ASSIGN) {
+						if (type == TYPE_READONLY_BUFFER) {
+							_set_error(RTR("Default values are not supported for readonly_buffer uniforms."));
+							return ERR_PARSE_ERROR;
+						}
 						if (uniform.array_size > 0) {
 							_set_error(RTR("Setting default values to uniform arrays is not supported."));
 							return ERR_PARSE_ERROR;
@@ -10934,6 +11012,10 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 						param_type = TYPE_STRUCT;
 					} else {
 						param_type = get_token_datatype(tk.type);
+						if (param_type == TYPE_READONLY_BUFFER) {
+							_set_error(RTR("A readonly_buffer cannot be a function parameter."));
+							return ERR_PARSE_ERROR;
+						}
 						if (param_type == TYPE_VOID) {
 							_set_error(RTR("Void type not allowed as argument."));
 							return ERR_PARSE_ERROR;
@@ -12127,7 +12209,7 @@ Error ShaderLanguage::complete(const String &p_code, const ShaderCompileInfo &p_
 						r_options->push_back(option);
 					}
 				}
-			} else if ((int(completion_base) > int(TYPE_MAT4) && int(completion_base) < int(TYPE_STRUCT))) {
+			} else if (is_sampler_type(completion_base)) {
 				Vector<String> options;
 				if (current_uniform_filter == FILTER_DEFAULT) {
 					options.push_back("filter_linear");

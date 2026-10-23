@@ -1445,10 +1445,10 @@ void RenderingDevice::buffer_flush(RID p_buffer) {
 	driver->buffer_flush(buffer->driver_id);
 }
 
-bool RenderingDevice::storage_buffer_is_valid(RID p_buffer, uint64_t p_minimum_size, bool p_require_indirect) {
+bool RenderingDevice::storage_buffer_is_valid(RID p_buffer, uint64_t p_minimum_size, bool p_require_indirect, uint64_t p_size_multiple) {
 	ERR_RENDER_THREAD_GUARD_V(false);
 	const Buffer *buffer = storage_buffer_owner.get_or_null(p_buffer);
-	return buffer && buffer->size >= p_minimum_size && buffer->usage.has_flag(RDD::BUFFER_USAGE_STORAGE_BIT) && (!p_require_indirect || buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT));
+	return buffer && buffer->size >= p_minimum_size && p_size_multiple != 0 && (buffer->size % p_size_multiple) == 0 && buffer->usage.has_flag(RDD::BUFFER_USAGE_STORAGE_BIT) && (!p_require_indirect || buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT));
 }
 
 RID RenderingDevice::storage_buffer_create(uint32_t p_size_bytes, Span<uint8_t> p_data, BitField<StorageBufferUsage> p_usage, BitField<BufferCreationBits> p_creation_bits) {

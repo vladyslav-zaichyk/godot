@@ -1,0 +1,12 @@
+#version 450
+layout(local_size_x = 4, local_size_y = 1, local_size_z = 1) in;
+layout(set = 0, binding = 0, std430) buffer Records { uvec4 values[]; } records;
+layout(push_constant, std430) uniform Parameters { uint seed; } parameters;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= 4u) { return; }
+    records.values[i] = uvec4(parameters.seed + i * 17u,
+        parameters.seed ^ (i * 11u + 3u),
+        floatBitsToUint(float(parameters.seed + i) * 0.125), 0x12340000u + i);
+}

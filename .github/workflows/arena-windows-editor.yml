@@ -27,14 +27,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: arena-windows-receipts-${{ github.sha }}
+          include-hidden-files: true
           path: .arena/build-*/
           retention-days: 30
       - name: Retain editor candidate
         uses: actions/upload-artifact@v4
         with:
           name: arena-windows-editor-${{ github.sha }}
+          include-hidden-files: true
           path: |
             bin/*.arena_dev.mono.exe
+            bin/*.arena_dev.mono.console.exe
             bin/GodotSharp/
             bin/_sc_
             .arena/nuget-source/

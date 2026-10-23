@@ -39,7 +39,9 @@
 #include "core/os/os.h"
 #include "core/version.h"
 #include "scene/main/scene_tree.h"
+#include "scene/resources/buffer_rd.h"
 #include "scene/resources/texture.h"
+#include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server.h"
 
 void Material::set_next_pass(const Ref<Material> &p_pass) {
@@ -385,22 +387,20 @@ bool ShaderMaterial::_property_get_revert(const StringName &p_name, Variant &r_p
 }
 
 void ShaderMaterial::set_shader(const Ref<Shader> &p_shader) {
-	// Only connect/disconnect the signal when running in the editor.
-	// This can be a slow operation, and `notify_property_list_changed()` (which is called by `_shader_changed()`)
-	// does nothing in non-editor builds anyway. See GH-34741 for details.
-	if (shader.is_valid() && Engine::get_singleton()->is_editor_hint()) {
+	// Buffer parameter validation caches uniform metadata. Shader edits (including
+	// runtime include edits) must invalidate it; property notifications remain editor-only.
+	if (shader.is_valid()) {
 		shader->disconnect_changed(callable_mp(this, &ShaderMaterial::_shader_changed));
 	}
 
 	shader = p_shader;
+	readonly_buffer_parameters_dirty = true;
 
 	RID rid;
 	if (shader.is_valid()) {
 		rid = shader->get_rid();
 
-		if (Engine::get_singleton()->is_editor_hint()) {
-			shader->connect_changed(callable_mp(this, &ShaderMaterial::_shader_changed));
-		}
+		shader->connect_changed(callable_mp(this, &ShaderMaterial::_shader_changed));
 	}
 
 	RID material_rid = _get_material();
@@ -417,6 +417,27 @@ Ref<Shader> ShaderMaterial::get_shader() const {
 }
 
 void ShaderMaterial::set_shader_parameter(const StringName &p_param, const Variant &p_value) {
+	if (readonly_buffer_parameters_dirty) {
+		readonly_buffer_parameters.clear();
+		if (shader.is_valid()) {
+			List<PropertyInfo> parameters;
+			shader->get_shader_uniform_list(&parameters);
+			for (const PropertyInfo &parameter : parameters) {
+				if (parameter.hint == PROPERTY_HINT_RESOURCE_TYPE && parameter.hint_string == "BufferRD") {
+					readonly_buffer_parameters.insert(parameter.name);
+				}
+			}
+		}
+		readonly_buffer_parameters_dirty = false;
+	}
+	if (p_value.get_type() != Variant::NIL && readonly_buffer_parameters.has(p_param)) {
+		Ref<BufferRD> buffer;
+		if (p_value.get_type() == Variant::OBJECT) {
+			buffer = p_value;
+		}
+		ERR_FAIL_COND_MSG(!RenderingServer::get_singleton()->is_on_render_thread(), "BufferRD shader parameter assignments require the render thread.");
+		ERR_FAIL_COND_MSG(buffer.is_null() || !RD::get_singleton() || !RD::get_singleton()->storage_buffer_is_valid(buffer->get_buffer_rd_rid(), 16, false, 16), "Read-only buffer shader parameters require a live, attached BufferRD resource.");
+	}
 	RID material_rid = _get_material();
 	if (p_value.get_type() == Variant::NIL) {
 		param_cache.erase(p_param);
@@ -459,7 +480,10 @@ Variant ShaderMaterial::get_shader_parameter(const StringName &p_param) const {
 }
 
 void ShaderMaterial::_shader_changed() {
-	notify_property_list_changed(); //update all properties
+	readonly_buffer_parameters_dirty = true;
+	if (Engine::get_singleton()->is_editor_hint()) {
+		notify_property_list_changed(); //update all properties
+	}
 }
 
 void ShaderMaterial::_check_material_rid() const {

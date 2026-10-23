@@ -1,0 +1,13 @@
+<Project>
+  <Sdk Name="Godot.NET.Sdk" Version="$(ArenaGodotSdkVersion)" />
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Optimize>true</Optimize>
+    <DebugType>portable</DebugType>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="GodotSdkVersion" Value="$(ArenaGodotSdkVersion)" />
+  </ItemGroup>
+</Project>

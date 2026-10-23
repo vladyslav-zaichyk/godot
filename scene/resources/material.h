@@ -31,6 +31,7 @@
 #pragma once
 
 #include "core/io/resource.h"
+#include "core/templates/hash_set.h"
 #include "core/templates/self_list.h"
 #include "scene/resources/shader.h"
 #include "servers/rendering/rendering_server_enums.h"
@@ -99,6 +100,8 @@ class ShaderMaterial : public Material {
 	mutable HashMap<StringName, StringName> remap_cache;
 	mutable HashMap<StringName, Variant> param_cache;
 	mutable Mutex material_rid_mutex;
+	HashSet<StringName> readonly_buffer_parameters;
+	bool readonly_buffer_parameters_dirty = true;
 
 protected:
 	bool _set(const StringName &p_name, const Variant &p_value);

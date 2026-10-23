@@ -32,6 +32,7 @@
 
 #include "core/config/project_settings.h"
 #include "core/math/math_defs.h"
+#include "core/os/os.h"
 #include "servers/rendering/renderer_rd/forward_clustered/render_forward_clustered.h"
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
 #include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
@@ -44,6 +45,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	code = p_code;
 	ubo_size = 0;
 	uniforms.clear();
+	buffer_uniforms.clear();
 	_clear_vertex_input_mask_cache();
 
 	if (code.is_empty()) {
@@ -93,6 +95,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	int stencil_referencei = -1;
 
 	ShaderCompiler::IdentifierActions actions;
+	actions.allow_readonly_buffers = OS::get_singleton()->get_current_rendering_driver_name() == "vulkan";
 	actions.entry_point_stages["vertex"] = ShaderCompiler::STAGE_VERTEX;
 	actions.entry_point_stages["fragment"] = ShaderCompiler::STAGE_FRAGMENT;
 	actions.entry_point_stages["light"] = ShaderCompiler::STAGE_FRAGMENT;
@@ -236,6 +239,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	ubo_size = gen_code.uniform_total_size;
 	ubo_offsets = gen_code.uniform_offsets;
 	texture_uniforms = gen_code.texture_uniforms;
+	buffer_uniforms = gen_code.buffers;
 
 	pipeline_hash_map.clear_pipelines();
 
@@ -596,7 +600,7 @@ bool SceneShaderForwardClustered::MaterialData::update_parameters(const HashMap<
 		RID shader_rid = SceneShaderForwardClustered::singleton->shader.version_get_shader(shader_data->version, 0);
 
 		MutexLock lock(SceneShaderForwardClustered::singleton_mutex);
-		return update_parameters_uniform_set(p_parameters, p_uniform_dirty, p_textures_dirty, shader_data->uniforms, shader_data->ubo_offsets.ptr(), shader_data->texture_uniforms, shader_data->default_texture_params, shader_data->ubo_size, uniform_set, shader_rid, RenderForwardClustered::MATERIAL_UNIFORM_SET, true, true);
+		return update_parameters_uniform_set(p_parameters, p_uniform_dirty, p_textures_dirty, shader_data->uniforms, shader_data->ubo_offsets.ptr(), shader_data->texture_uniforms, shader_data->default_texture_params, shader_data->ubo_size, uniform_set, shader_rid, RenderForwardClustered::MATERIAL_UNIFORM_SET, true, true, &shader_data->buffer_uniforms);
 	} else {
 		return false;
 	}

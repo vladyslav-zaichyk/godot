@@ -645,7 +645,7 @@ bool MaterialStorage::ShaderData::is_parameter_texture(const StringName &p_param
 		return false;
 	}
 
-	return uniforms[p_param].is_texture();
+	return uniforms[p_param].is_texture() || uniforms[p_param].is_buffer();
 }
 
 RD::PipelineColorBlendState::Attachment MaterialStorage::ShaderData::blend_mode_to_blend_attachment(BlendMode p_mode) {
@@ -743,7 +743,7 @@ void MaterialStorage::MaterialData::update_uniform_buffer(const HashMap<StringNa
 	bool uses_global_buffer = false;
 
 	for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : p_uniforms) {
-		if (E.value.is_texture()) {
+		if (E.value.is_texture() || E.value.is_buffer()) {
 			continue; // texture, does not go here
 		}
 
@@ -1152,7 +1152,7 @@ void MaterialStorage::MaterialData::free_parameters_uniform_set(RID p_uniform_se
 	}
 }
 
-bool MaterialStorage::MaterialData::update_parameters_uniform_set(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty, const HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &p_uniforms, const uint32_t *p_uniform_offsets, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, const HashMap<StringName, HashMap<int, RID>> &p_default_texture_params, uint32_t p_ubo_size, RID &uniform_set, RID p_shader, uint32_t p_shader_uniform_set, bool p_use_linear_color, bool p_3d_material) {
+bool MaterialStorage::MaterialData::update_parameters_uniform_set(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty, const HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &p_uniforms, const uint32_t *p_uniform_offsets, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, const HashMap<StringName, HashMap<int, RID>> &p_default_texture_params, uint32_t p_ubo_size, RID &uniform_set, RID p_shader, uint32_t p_shader_uniform_set, bool p_use_linear_color, bool p_3d_material, const Vector<ShaderCompiler::GeneratedCode::Buffer> *p_buffer_uniforms) {
 	if ((uint32_t)ubo_data[p_use_linear_color].size() != p_ubo_size) {
 		p_uniform_dirty = true;
 		if (uniform_buffer[p_use_linear_color].is_valid()) {
@@ -1202,7 +1202,28 @@ bool MaterialStorage::MaterialData::update_parameters_uniform_set(const HashMap<
 		update_textures(p_parameters, p_default_texture_params, p_texture_uniforms, texture_cache.ptrw(), p_use_linear_color, p_3d_material);
 	}
 
-	if (p_ubo_size == 0 && (p_texture_uniforms.is_empty())) {
+	const int buffer_count = p_buffer_uniforms ? p_buffer_uniforms->size() : 0;
+	Vector<RID> next_buffer_cache;
+	next_buffer_cache.resize(buffer_count);
+	for (int i = 0; i < buffer_count; i++) {
+		RID buffer;
+		const Variant *value = p_parameters.getptr((*p_buffer_uniforms)[i].name);
+		if (value && value->get_type() == Variant::RID) {
+			buffer = *value;
+		}
+		if (!RD::get_singleton()->storage_buffer_is_valid(buffer, 16, false, 16)) {
+			buffer = MaterialStorage::get_singleton()->default_readonly_buffer;
+		}
+		next_buffer_cache.write[i] = buffer;
+	}
+	if (next_buffer_cache != buffer_cache) {
+		buffer_cache = next_buffer_cache;
+		p_textures_dirty = true;
+		free_parameters_uniform_set(uniform_set);
+		uniform_set = RID();
+	}
+
+	if (p_ubo_size == 0 && p_texture_uniforms.is_empty() && buffer_count == 0) {
 		// This material does not require an uniform set, so don't create it.
 		return false;
 	}
@@ -1239,6 +1260,14 @@ bool MaterialStorage::MaterialData::update_parameters_uniform_set(const HashMap<
 			}
 			uniforms.push_back(u);
 		}
+	}
+
+	for (int i = 0; i < buffer_count; i++) {
+		RD::Uniform u;
+		u.uniform_type = RD::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.binding = (*p_buffer_uniforms)[i].binding;
+		u.append_id(buffer_cache[i]);
+		uniforms.push_back(u);
 	}
 
 	uniform_set = RD::get_singleton()->uniform_set_create(uniforms, p_shader, p_shader_uniform_set);
@@ -1470,6 +1499,12 @@ MaterialStorage *MaterialStorage::get_singleton() {
 MaterialStorage::MaterialStorage() {
 	singleton = this;
 
+	// One zero record keeps optional/missing material storage bindings valid.
+	Vector<uint8_t> zero_record;
+	zero_record.resize(16);
+	memset(zero_record.ptrw(), 0, zero_record.size());
+	default_readonly_buffer = RD::get_singleton()->storage_buffer_create(16, zero_record);
+
 	//default samplers
 	default_samplers = samplers_rd_allocate();
 
@@ -1508,6 +1543,7 @@ MaterialStorage::MaterialStorage() {
 }
 
 MaterialStorage::~MaterialStorage() {
+	RD::get_singleton()->free_rid(default_readonly_buffer);
 	memdelete_arr(global_shader_uniforms.buffer_values);
 	memdelete_arr(global_shader_uniforms.buffer_usage);
 	memdelete_arr(global_shader_uniforms.buffer_dirty_regions);
@@ -2541,6 +2577,15 @@ void MaterialStorage::material_set_param(RID p_material, const StringName &p_par
 	Material *material = material_owner.get_or_null(p_material);
 	ERR_FAIL_NULL(material);
 
+	// Reject invalid explicit assignments before changing the previous binding.
+	if (p_value.get_type() != Variant::NIL && material->shader && material->shader->data) {
+		const ShaderLanguage::ShaderNode::Uniform *uniform = material->shader->data->uniforms.getptr(p_param);
+		if (uniform && uniform->is_buffer()) {
+			if (p_value.get_type() != Variant::RID || !RD::get_singleton()->storage_buffer_is_valid(p_value, 16, false, 16)) {
+				return;
+			}
+		}
+	}
 	if (p_value.get_type() == Variant::NIL) {
 		material->params.erase(p_param);
 	} else {

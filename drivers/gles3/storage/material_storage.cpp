@@ -677,6 +677,7 @@ static const GLenum target_from_type[ShaderLanguage::TYPE_MAX] = {
 	GL_TEXTURE_CUBE_MAP, // TYPE_SAMPLERCUBE,
 	GL_TEXTURE_CUBE_MAP, // TYPE_SAMPLERCUBEARRAY,
 	_GL_TEXTURE_EXTERNAL_OES, // TYPE_SAMPLEREXT
+	0, // TYPE_READONLY_BUFFER (unsupported by this renderer)
 	GL_TEXTURE_2D, // TYPE_STRUCT
 };
 
