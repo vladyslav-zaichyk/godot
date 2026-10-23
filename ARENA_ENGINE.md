@@ -11,7 +11,9 @@ Godot's existing license, copyright and third-party notices continue to apply.
 - Default integration branch: `arena/4.7.2`, based on official `4.7.2-stable`,
   commit `ed1daf0bf001b61586d9930840f2f1394092c079`.
 - `feature/shared-multimesh` preserves the original shared-buffer patch series.
-- New API work uses `feature/<name>` and a PR targeting `arena/4.7.2`.
+- New API work uses `feature/<name>` and a PR targeting `arena/4.7.2`. A feature
+  that depends on an unmerged patch can temporarily target that feature branch;
+  keep each patch's diff and consumer build separately identifiable.
 - Consumer builds use a named, immutable `arena-4.7.2-*` tag, full source SHA,
   unique .NET package version and SHA-256 asset manifest. Never force-push a
   published integration branch or move a published consumer tag.
@@ -29,8 +31,11 @@ production or gameplay admission. BufferRD development has separate checks.
    `git range-diff` against the previous patch series. Rebase only unpublished
    candidates; keep existing consumer history available.
 4. Update the build helper's `PIN` to the new verified upstream base and review
-   its managed SDK/toolchain pins. Build an unmodified upstream control and the feature candidate using matching
-   options. Regenerate native/.NET bindings and use a new SDK/package identity.
+   its managed SDK/toolchain pins. Retain a compatible immutable control and
+   build the new feature candidate using matching options. Rebuild a control
+   when its provenance/profile is incompatible or an upstream upgrade requires
+   it; a paired rebuild is not mandatory for every patch. Regenerate native/.NET
+   bindings and use a new SDK/package identity.
 5. Run compiler/API, real-backend correctness and lifetime checks. The renderer
    owner separately runs matched performance/quality qualification.
 6. Publish the successful candidate under a new version branch and consumer tag.
@@ -133,3 +138,33 @@ Vulkan execution passed, while its performance effect remains unmeasured.
 References: [Godot .NET builds](https://docs.godotengine.org/en/stable/engine_details/development/compiling/compiling_with_dotnet.html),
 [upstream buffer proposal](https://github.com/godotengine/godot-proposals/issues/6989),
 [draft implementation discussion](https://github.com/godotengine/godot/pull/109951).
+
+## E6a native Mesh RD buffers
+
+This backports [upstream PR #118973](https://github.com/godotengine/godot/pull/118973),
+source `7cbebab1d05fc8837655b87d10bbde4f9cd5a1af`. RenderingServer exposes
+`mesh_surface_get_vertex_buffer_rd_rid`, `mesh_surface_get_attribute_buffer_rd_rid`,
+`mesh_surface_get_skin_buffer_rd_rid`, and `mesh_surface_get_index_buffer_rd_rid`.
+Create the surface with `Mesh.ARRAY_FLAG_USE_STORAGE_BUFFER` to opt its buffers
+into storage usage. In C#, the flag is `Mesh.ArrayFormat.FlagUseStorageBuffer`.
+The skin stream already has storage usage when skinning data exists.
+
+The mesh owns every returned RID. Borrow it on the rendering thread with the
+global RenderingDevice; never call `free_rid` on it. Keep the owner alive, retire
+dependent work before changing its surfaces, and refetch after recreation.
+Absent streams and non-RD renderers return invalid RIDs. These getters expose
+base surface data, not a per-instance skinned/blend-shape output.
+
+Use queried native stream offsets, strides, compression and allocation sizes.
+Positions, attributes, skin data and indices have distinct packed formats; this
+is not the BufferRD `uvec4[]` ABI. Index elements are 16-bit through 65536 vertices
+and 32-bit above that boundary. Compute writes preserve the fixed format/counts
+and valid index range. Schedule writes before consuming draws and set conservative
+custom bounds; bounds and cached CPU geometry are not updated by compute.
+
+`misc/arena/mesh_rd_lab` is the procedural contract consumer. Its separate
+Windows .NET candidate must retain its exact native/fixture SHAs and SDK version.
+Compiler/CPU/managed checks and real Vulkan/lifetime checks have separate status.
+This API does not attach arbitrary external buffers, implement a shared animation
+cache, or establish an FPS or physical-VRAM improvement. Existing E5 packages are
+immutable controls; local GPU runs wait for the renderer agent's test window.

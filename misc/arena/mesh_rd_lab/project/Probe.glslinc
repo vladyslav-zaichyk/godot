@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0,std430) buffer NativeStream { uint words[]; } native_stream;
+// Keep a real reflected storage descriptor. This shader is used to validate binding, not dispatched.
+layout(push_constant,std430) uniform Params { uint count; } params;
+void main() { if (params.count != 0u) native_stream.words[0] += params.count; }
