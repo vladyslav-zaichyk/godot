@@ -428,8 +428,10 @@ public:
 
 	FUNC6(multimesh_allocate_data, RID, int, RSE::MultimeshTransformFormat, bool, bool, bool)
 	FUNC5R(Error, multimesh_attach_shared_buffers, RID, RID, int, RID, int)
+	FUNC4R(Error, multimesh_attach_shared_draw_buffer, RID, int, RID, int)
 	FUNC1(multimesh_detach_shared_buffers, RID)
 	FUNC1RC(bool, multimesh_is_using_shared_buffers, RID)
+	FUNC1RC(bool, multimesh_is_shader_driven, RID)
 	FUNC1RC(int, multimesh_get_instance_count, RID)
 
 	FUNC2(multimesh_set_mesh, RID, RID)

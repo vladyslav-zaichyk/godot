@@ -259,10 +259,11 @@ void vertex_shader(vec3 vertex_input,
 		model_normal_matrix = mat3(model_matrix);
 	}
 
-	mat4 matrix;
+	// Shader-driven MultiMeshes keep the geometry-owner transform, without indexed instance storage.
+	mat4 matrix = mat4(1.0);
 	mat4 read_model_matrix = model_matrix;
 
-	if (sc_multimesh()) {
+	if (sc_multimesh() && !sc_shader_driven_instances()) {
 		//multimesh, instances are for it
 
 #ifdef USE_PARTICLE_TRAILS

@@ -2726,6 +2726,19 @@
 				CPU instance setters/getters, buffer uploads/readback, visible-count changes, physics interpolation, mesh replacement, and engine-managed motion history are unavailable while attached. Motion vectors, TAA, and compositor motion requirements must remain disabled for the entire binding lifetime. The rendering method must stay unchanged. The caller must keep the input mesh resource immutable, including in-place surface, LOD, and shadow-mesh changes that bypass MultiMesh mesh assignment. Existing buffer RID getters expose the borrowed buffers; never free them as view-owned resources. The caller must detach every borrower before freeing or replacing its buffers, and preserve resources until recorded rendering dependencies are safely retired. No ownership is transferred.
 			</description>
 		</method>
+		<method name="multimesh_attach_shared_draw_buffer">
+			<return type="int" enum="Error" />
+			<param index="0" name="multimesh" type="RID" />
+			<param index="1" name="draw_slot_capacity" type="int" />
+			<param index="2" name="indirect_command_buffer" type="RID" />
+			<param index="3" name="command_byte_offset" type="int" />
+			<description>
+				Experimental Arena extension: attaches a shader-driven shared-indirect view to an empty MultiMesh, or rebinds an existing shared view. Call on the rendering thread using [method call_on_render_thread]. Supported only by Vulkan/Forward+ with [code]drawIndirectFirstInstance[/code]. The view borrows the caller's global [RenderingDevice] indirect storage buffer and has no native per-instance transform pool. Set an immutable mesh and finite, nonempty MultiMesh-local [method multimesh_set_custom_aabb] first; do not allocate ordinary instance storage. The mesh must have one indexed triangle surface without built-in LODs, a shadow mesh or blend shapes. Colors, custom data and CPU physics interpolation are unavailable. Invalid attachments and rebinds preserve the previous view.
+				[param draw_slot_capacity] is a positive bound on addressed draw slots, not a transform-pool size or a stable entity count. [param command_byte_offset] is 4-byte aligned and selects one complete 20-byte indexed indirect command. The caller supplies mesh-compatible index count and offsets, bounds append writes, and guarantees [code]firstInstance + instanceCount &lt;= draw_slot_capacity[/code] using overflow-safe arithmetic. Shader [code]INSTANCE_ID[/code] includes [code]firstInstance[/code]. Commands are not read back for validation. The custom shader owns any draw-slot-to-stable-ID lookup, state/pose layout, vertex and normal/tangent transforms, and conservative bounds; this method does not attach ID or pose buffers. Material-local [BufferRD] resources can supply those borrowed buffers.
+				Every effective material must explicitly declare the spatial render mode [code]shader_driven_instances[/code] and must not use [code]POINT_SIZE[/code]. Missing, default or incompatible shaders are skipped with a bounded diagnostic, including material overrides, overlays, next passes and renderer replacements. Depth and shadow rendering must retain the custom vertex path; per-camera and per-light visibility remains the caller's responsibility. Motion vectors, TAA and compositor motion requirements are unsupported and must remain disabled throughout the binding lifetime. The rendering method and mesh contents must remain unchanged.
+				Use [method multimesh_is_shader_driven] to query this mode and [method multimesh_detach_shared_buffers] to detach it. [method multimesh_get_buffer_rd_rid] returns an invalid RID because no transform pool exists; [method multimesh_get_command_buffer_rd_rid] returns the borrowed command RID. CPU instance setters/getters, transform-buffer operations, visible-count changes and engine-managed history are unavailable. Detach every command borrower, clear ID/pose [BufferRD] resources from every material, and retire queued rendering before freeing caller-owned commands, IDs or poses. Neither detachment nor MultiMesh destruction frees caller storage.
+			</description>
+		</method>
 		<method name="multimesh_create">
 			<return type="RID" />
 			<description>
@@ -2739,7 +2752,7 @@
 			<return type="void" />
 			<param index="0" name="multimesh" type="RID" />
 			<description>
-				Detaches shared storage without freeing either caller-owned buffer. Leaves an empty ordinary MultiMesh, preserving its mesh and custom bounds. Calling on an ordinary MultiMesh is a no-op. MultiMesh destruction also detaches borrowed storage. Ordinary indirect initialization behavior is unchanged.
+				Detaches storage attached by [method multimesh_attach_shared_buffers] or [method multimesh_attach_shared_draw_buffer] without freeing caller-owned buffers. Leaves an empty ordinary MultiMesh, preserving its mesh and custom bounds. Calling on an ordinary MultiMesh is a no-op. MultiMesh destruction also detaches borrowed storage. Ordinary indirect initialization behavior is unchanged.
 			</description>
 		</method>
 		<method name="multimesh_get_aabb" qualifiers="const">
@@ -2762,13 +2775,14 @@
 			<param index="0" name="multimesh" type="RID" />
 			<description>
 				Returns the [RenderingDevice] [RID] handle of the [MultiMesh], which can be used as any other buffer on the Rendering Device.
+				Returns an invalid RID for a shader-driven view attached with [method multimesh_attach_shared_draw_buffer], which has no native transform pool.
 			</description>
 		</method>
 		<method name="multimesh_get_command_buffer_rd_rid" qualifiers="const">
 			<return type="RID" />
 			<param index="0" name="multimesh" type="RID" />
 			<description>
-				Returns the [RenderingDevice] [RID] handle of the [MultiMesh] command buffer. This [RID] is only valid if [code]use_indirect[/code] is set to [code]true[/code] when allocating data through [method multimesh_allocate_data]. It can be used to directly modify the instance count via buffer.
+				Returns the [RenderingDevice] [RID] handle of the [MultiMesh] command buffer. This [RID] is valid if [code]use_indirect[/code] is set to [code]true[/code] when allocating data through [method multimesh_allocate_data], or if an indirect command buffer is borrowed through a shared attach method. In a shared view this is the caller-owned RID, not a resource owned by the MultiMesh. It can be used to directly modify the instance count via buffer.
 				The data structure is dependent on both how many surfaces the mesh contains and whether it is indexed or not, the buffer has 5 integers in it, with the last unused if the mesh is not indexed.
 				Each of the values in the buffer correspond to these options:
 				[codeblock lang=text]
@@ -2900,11 +2914,18 @@
 				This is useful when moving all instances to new locations, to give instantaneous changes rather than interpolation from the previous locations.
 			</description>
 		</method>
+		<method name="multimesh_is_shader_driven" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Returns whether the MultiMesh is currently attached through [method multimesh_attach_shared_draw_buffer], with caller-owned indirect commands and shader-owned instance transforms. Returns [code]false[/code] for ordinary MultiMeshes and transform-backed views attached through [method multimesh_attach_shared_buffers]. This mode flag does not validate GPU command contents or keep borrowed resources alive.
+			</description>
+		</method>
 		<method name="multimesh_is_using_shared_buffers" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="multimesh" type="RID" />
 			<description>
-				Returns whether the MultiMesh currently borrows externally owned transform and indirect-command buffers.
+				Returns whether the MultiMesh currently borrows externally owned buffers through [method multimesh_attach_shared_buffers] or [method multimesh_attach_shared_draw_buffer]. Use [method multimesh_is_shader_driven] to distinguish a view without native transform storage.
 			</description>
 		</method>
 		<method name="multimesh_set_buffer">

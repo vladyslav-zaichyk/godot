@@ -51,6 +51,7 @@ public:
 	struct IdentifierActions {
 		HashMap<StringName, Stage> entry_point_stages;
 		bool allow_readonly_buffers = false;
+		bool allow_shader_driven_instances = false;
 
 		HashMap<StringName, Pair<int *, int>> render_mode_values;
 		HashMap<StringName, bool *> render_mode_flags;

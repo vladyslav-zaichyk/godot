@@ -38,8 +38,10 @@
 #include "servers/rendering/renderer_rd/storage_rd/particles_storage.h"
 #include "servers/rendering/renderer_rd/storage_rd/texture_storage.h"
 #include "servers/rendering/renderer_rd/uniform_set_cache_rd.h"
+#include "servers/rendering/renderer_viewport.h"
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server_default.h"
+#include "servers/rendering/storage/compositor_storage.h"
 #include "servers/rendering/storage/ltc_lut.gen.h"
 
 using namespace RendererSceneRenderImplementation;
@@ -337,6 +339,9 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 	}
 
 	bool should_request_redraw = false;
+	const bool shader_driven_motion_unavailable = RSG::viewport->get_num_viewports_with_motion_vectors() > 0 ||
+			RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() > 0 ||
+			(p_color_pass_flags & COLOR_PASS_FLAG_MOTION_VECTORS) != 0;
 
 	for (uint32_t i = p_from_element; i < p_to_element; i++) {
 		const GeometryInstanceSurfaceDataCache *surf = p_params->elements[i];
@@ -388,6 +393,24 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 			continue;
 		}
 
+		if (surf->owner->shader_driven_instances) {
+			// Check the selected pass/debug material, including overlay and next-pass surfaces.
+			if (shader_driven_motion_unavailable) {
+				if (!surf->owner->shader_driven_motion_warning) {
+					WARN_PRINT("Shader-driven MultiMesh draws are skipped while motion vectors, TAA, or compositor motion requirements are enabled.");
+					surf->owner->shader_driven_motion_warning = true;
+				}
+				continue;
+			}
+			if (!shader || !shader->is_valid() || !shader->shader_driven_instances || shader->uses_point_size) {
+				if (!surf->owner->shader_driven_material_warning) {
+					WARN_PRINT("Shader-driven MultiMesh draws require a valid material with render_mode shader_driven_instances and no POINT_SIZE usage; incompatible draws are skipped.");
+					surf->owner->shader_driven_material_warning = true;
+				}
+				continue;
+			}
+		}
+
 		//request a redraw if one of the shaders uses TIME
 		if (shader->uses_time) {
 			should_request_redraw = true;
@@ -423,6 +446,7 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 		pipeline_specialization.multimesh_format_2d = bool(surf->owner->base_flags & INSTANCE_DATA_FLAG_MULTIMESH_FORMAT_2D);
 		pipeline_specialization.multimesh_has_color = bool(surf->owner->base_flags & INSTANCE_DATA_FLAG_MULTIMESH_HAS_COLOR);
 		pipeline_specialization.multimesh_has_custom_data = bool(surf->owner->base_flags & INSTANCE_DATA_FLAG_MULTIMESH_HAS_CUSTOM_DATA);
+		pipeline_specialization.shader_driven_instances = surf->owner->shader_driven_instances;
 
 		if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 			pipeline_specialization.use_light_soft_shadows = element_info.uses_softshadow;
@@ -4387,6 +4411,27 @@ void RenderForwardClustered::_geometry_instance_update(RenderGeometryInstance *p
 
 		case RSE::INSTANCE_MULTIMESH: {
 			RID mesh = mesh_storage->multimesh_get_mesh(ginstance->data->base);
+			if (mesh_storage->multimesh_is_shader_driven(ginstance->data->base)) {
+				ginstance->instance_count = 0;
+				if (ginstance->data->dirty_dependencies) {
+					// Invalid topology creates no surfaces; retain dependencies so restoration rebuilds the cache.
+					RSG::utilities->base_update_dependency(ginstance->data->base, &ginstance->data->dependency_tracker);
+				}
+				bool compatible_mesh = mesh_storage->owns_mesh(mesh) && mesh_storage->mesh_get_surface_count(mesh) == 1 &&
+						mesh_storage->mesh_get_blend_shape_count(mesh) == 0 && !mesh_storage->mesh_get_shadow_mesh(mesh).is_valid();
+				if (compatible_mesh) {
+					void *surface = mesh_storage->mesh_get_surface(mesh, 0u);
+					compatible_mesh = surface && mesh_storage->mesh_surface_get_primitive(surface) == RSE::PRIMITIVE_TRIANGLES &&
+							!mesh_storage->mesh_surface_has_lod(surface) && mesh_storage->mesh_surface_get_index_array(surface, 0).is_valid();
+				}
+				if (!compatible_mesh) {
+					if (!ginstance->shader_driven_mesh_warning) {
+						WARN_PRINT("Shader-driven MultiMesh draws require one indexed triangle surface without LODs, a shadow mesh, or blend shapes; incompatible mesh changes are skipped.");
+						ginstance->shader_driven_mesh_warning = true;
+					}
+					break;
+				}
+			}
 			if (mesh.is_valid()) {
 				const RID *materials = nullptr;
 				uint32_t surface_count;
@@ -4442,6 +4487,7 @@ void RenderForwardClustered::_geometry_instance_update(RenderGeometryInstance *p
 	//Fill push constant
 
 	ginstance->base_flags = 0;
+	ginstance->shader_driven_instances = false;
 
 	bool store_transform = true;
 	if (ginstance->data->base_type == RSE::INSTANCE_MULTIMESH) {
@@ -4460,7 +4506,9 @@ void RenderForwardClustered::_geometry_instance_update(RenderGeometryInstance *p
 			ginstance->base_flags |= INSTANCE_DATA_FLAG_MULTIMESH_INDIRECT;
 		}
 
-		ginstance->transforms_uniform_set = mesh_storage->multimesh_get_3d_uniform_set(ginstance->data->base, scene_shader.default_shader_rd, TRANSFORMS_UNIFORM_SET);
+		ginstance->shader_driven_instances = mesh_storage->multimesh_is_shader_driven(ginstance->data->base);
+		// Keep a valid set 2 descriptor; the shader-driven specialization must never read it.
+		ginstance->transforms_uniform_set = ginstance->shader_driven_instances ? scene_shader.default_vec4_xform_uniform_set : mesh_storage->multimesh_get_3d_uniform_set(ginstance->data->base, scene_shader.default_shader_rd, TRANSFORMS_UNIFORM_SET);
 
 	} else if (ginstance->data->base_type == RSE::INSTANCE_PARTICLES) {
 		ginstance->base_flags |= INSTANCE_DATA_FLAG_PARTICLES;

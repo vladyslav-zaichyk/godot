@@ -73,10 +73,18 @@ Error RendererMeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID 
 	return ERR_UNAVAILABLE;
 }
 
+Error RendererMeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) {
+	return ERR_UNAVAILABLE;
+}
+
 void RendererMeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 }
 
 bool RendererMeshStorage::multimesh_is_using_shared_buffers(RID p_multimesh) const {
+	return false;
+}
+
+bool RendererMeshStorage::multimesh_is_shader_driven(RID p_multimesh) const {
 	return false;
 }
 

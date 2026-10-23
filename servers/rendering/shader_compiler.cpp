@@ -1669,6 +1669,11 @@ Error ShaderCompiler::compile(RSE::ShaderMode p_mode, const String &p_code, Iden
 		return err;
 	}
 
+	for (const StringName &render_mode : parser.get_shader()->render_modes) {
+		ERR_FAIL_COND_V_MSG(render_mode == "shader_driven_instances" && (!p_actions->allow_shader_driven_instances || p_mode != RSE::SHADER_SPATIAL), ERR_UNAVAILABLE,
+				"shader_driven_instances requires the Vulkan Forward+ renderer.");
+	}
+
 	for (const KeyValue<StringName, SL::ShaderNode::Uniform> &E : parser.get_shader()->uniforms) {
 		ERR_FAIL_COND_V_MSG(E.value.is_buffer() && (!p_actions->allow_readonly_buffers || p_mode != RSE::SHADER_SPATIAL), ERR_UNAVAILABLE,
 				"readonly_buffer uniforms require the Vulkan Forward+ renderer.");

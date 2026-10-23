@@ -1599,6 +1599,7 @@ Error MeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transf
 	// All validation precedes mutation: failed rebinds preserve the old view.
 	_multimesh_clear_shared_uniform_sets(multimesh);
 	multimesh->shared_buffers = true;
+	multimesh->shader_driven = false;
 	multimesh->buffer = p_transform_buffer;
 	multimesh->command_buffer = p_indirect_command_buffer;
 	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
@@ -1620,6 +1621,67 @@ Error MeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transf
 	return OK;
 }
 
+Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) {
+	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	if (!multimesh) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (OS::get_singleton()->get_current_rendering_method() != "forward_plus" || OS::get_singleton()->get_current_rendering_driver_name() != "vulkan") {
+		return ERR_UNAVAILABLE;
+	}
+	if (p_draw_slot_capacity <= 0 || p_command_byte_offset < 0 || (p_command_byte_offset % sizeof(uint32_t)) != 0) {
+		return ERR_INVALID_PARAMETER;
+	}
+	RD *rd = RD::get_singleton();
+	if (!rd->get_device_driver()->supports_indirect_first_instance()) {
+		return ERR_UNAVAILABLE;
+	}
+	if (!rd->storage_buffer_is_valid(p_indirect_command_buffer, uint64_t(p_command_byte_offset) + INDIRECT_MULTIMESH_COMMAND_STRIDE * sizeof(uint32_t), true)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const Mesh *mesh = mesh_owner.get_or_null(multimesh->mesh);
+	if (!mesh || mesh->surface_count != 1 || mesh->surfaces[0]->index_count == 0 || mesh->surfaces[0]->primitive != RSE::PRIMITIVE_TRIANGLES || mesh->surfaces[0]->lod_count != 0 || mesh->shadow_mesh.is_valid() || mesh->blend_shape_count != 0) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (!multimesh->custom_aabb.is_finite() || !multimesh->custom_aabb.has_volume()) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const MultiMeshInterpolator &interpolator = multimesh->interpolator;
+	if (interpolator.interpolated || interpolator.on_interpolate_update_list || interpolator.on_transform_update_list || !interpolator._data_curr.is_empty() || !interpolator._data_prev.is_empty() || !interpolator._data_interpolated.is_empty() || multimesh->dirty || !multimesh->data_cache.is_empty()) {
+		return ERR_ALREADY_IN_USE;
+	}
+	if (!multimesh->shared_buffers && (multimesh->instances != 0 || multimesh->buffer.is_valid() || multimesh->command_buffer.is_valid())) {
+		return ERR_ALREADY_IN_USE;
+	}
+	if (RSG::viewport->get_num_viewports_with_motion_vectors() > 0 || RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() > 0) {
+		return ERR_UNAVAILABLE;
+	}
+	// Borrow only the command range. No transform allocation, upload or contents readback.
+	// All validation precedes mutation: failed rebinds preserve the old view.
+	_multimesh_clear_shared_uniform_sets(multimesh);
+	multimesh->shared_buffers = true;
+	multimesh->shader_driven = true;
+	multimesh->buffer = RID();
+	multimesh->command_buffer = p_indirect_command_buffer;
+	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
+	multimesh->instances = p_draw_slot_capacity;
+	multimesh->visible_instances = -1;
+	multimesh->indirect = true;
+	multimesh->xform_format = RSE::MULTIMESH_TRANSFORM_3D;
+	multimesh->uses_colors = false;
+	multimesh->uses_custom_data = false;
+	multimesh->stride_cache = 0;
+	multimesh->color_offset_cache = 0;
+	multimesh->custom_data_offset_cache = 0;
+	multimesh->buffer_set = false;
+	multimesh->motion_vectors_enabled = false;
+	multimesh->motion_vectors_current_offset = 0;
+	multimesh->motion_vectors_previous_offset = 0;
+	multimesh->motion_vectors_last_change = -1;
+	multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MULTIMESH);
+	return OK;
+}
+
 void MeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
@@ -1632,6 +1694,7 @@ void MeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 	multimesh->command_buffer = RID();
 	multimesh->command_byte_offset = 0;
 	multimesh->shared_buffers = false;
+	multimesh->shader_driven = false;
 	multimesh->instances = 0;
 	multimesh->visible_instances = -1;
 	multimesh->indirect = false;
@@ -1642,6 +1705,11 @@ void MeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 bool MeshStorage::multimesh_is_using_shared_buffers(RID p_multimesh) const {
 	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	return multimesh && multimesh->shared_buffers;
+}
+
+bool MeshStorage::multimesh_is_shader_driven(RID p_multimesh) const {
+	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	return multimesh && multimesh->shader_driven;
 }
 
 void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors, bool p_use_custom_data, bool p_use_indirect) {

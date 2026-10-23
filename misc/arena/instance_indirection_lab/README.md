@@ -1,10 +1,11 @@
 # Stable GPU IDs: source audit and E5 prototype boundary
 
-Status: research only, 2026-10-23. Engine source audited at
-`4c138f2fe2e7794ad53fd7bff850adf2d6c0174d`. No new native API, editor build,
-shader compilation, GPU correctness run or performance result is supplied here.
-Existing editor/SDK bundles remain immutable. Consumer source and assets stay
-outside this engine repository.
+Status: native prototype, 2026-10-23, based on the source audit at
+`4c138f2fe2e7794ad53fd7bff850adf2d6c0174d`. The shader-driven API below is
+implemented for a separate candidate; GPU correctness and performance remain
+unqualified. Existing editor/SDK bundles remain immutable. Game source and
+assets stay outside this engine repository; only a procedural contract fixture
+belongs here.
 
 ## Decision
 
@@ -112,13 +113,28 @@ requested sizes, not measured resident VRAM or an FPS prediction. With different
 grouping, shared capacity must cover the maximum addressed draw span. Packed
 nonzero firstInstance ranges may need a larger span than one view's count.
 
-## Proposed narrow native contract (not implemented)
+## Implemented narrow native contract (GPU qualification pending)
 
-Add an explicit shader-driven shared-indirect attach operation with independent
-`draw_slot_capacity`, borrowed command RID and command byte offset. Keep the
-existing transform-backed attach unchanged. Caller provides BufferRD ID/state
-bindings through its materials; the new operation does not define a game-state
-format or take ownership of ID/pose buffers.
+Call `RenderingServer.multimesh_attach_shared_draw_buffer(multimesh,
+draw_slot_capacity, indirect_command_buffer, command_byte_offset)` on the render
+thread. It returns an `Error`; validate success before using the view. The view
+has an independent positive draw capacity and a borrowed command range, with no
+native per-instance transform allocation. The existing transform-backed attach
+is unchanged. Caller provides BufferRD ID/state bindings through its materials;
+the new operation does not define a game-state format or own ID/pose buffers.
+Every effective spatial material must declare
+`render_mode shader_driven_instances` and must not use `POINT_SIZE`. This is an
+explicit capability: the same material can still render ordinary or
+transform-backed control views without enabling the new native mode.
+
+`multimesh_is_shader_driven` distinguishes this view from the existing shared
+mode. `multimesh_get_buffer_rd_rid` intentionally returns an invalid RID here;
+the command getter exposes caller-owned storage. Use the existing
+`multimesh_detach_shared_buffers` to detach either mode. Missing or incompatible
+effective materials and runtime motion requirements skip drawing with bounded
+diagnostics. Cache rebuild rejects incompatible in-place mesh topology, but the
+caller must still keep mesh contents immutable: changing compatible index data
+can invalidate command fields that are not read back for validation.
 
 Preserve current scope: 3D, Windows x64 Vulkan/Forward+ qualification, one indexed
 triangle surface, no built-in mesh LOD/shadow mesh/blend shapes, colors/custom
@@ -128,7 +144,7 @@ The producer bounds append/count and guarantees, using overflow-safe arithmetic,
 must preserve the previous view. Detach destroys view caches, not caller RIDs;
 retain all borrowed storage until every consumer and in-flight use is finished.
 
-Implementation seams:
+Implementation:
 
 - Extend existing RenderingServer/storage routing and MultiMesh mode state.
   Reuse shared-mode CPU-operation guards and dependency invalidation.

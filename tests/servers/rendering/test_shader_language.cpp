@@ -46,14 +46,16 @@ static ShaderLanguage::ShaderCompileInfo spatial_compile_info() {
 	return info;
 }
 
-static void initialize_compiler(ShaderCompiler &r_compiler, ShaderCompiler::IdentifierActions &r_actions, HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &r_uniforms, bool p_allow_buffers = true) {
+static void initialize_compiler(ShaderCompiler &r_compiler, ShaderCompiler::IdentifierActions &r_actions, HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &r_uniforms, bool p_allow_buffers = true, bool p_allow_shader_driven_instances = false) {
 	ShaderCompiler::DefaultIdentifierActions defaults;
 	defaults.base_texture_binding_index = 1;
 	defaults.texture_layout_set = 3;
 	defaults.base_uniform_string = "material.";
+	defaults.renames["INSTANCE_ID"] = "INSTANCE_INDEX";
 	r_compiler.initialize(defaults);
 	r_actions.uniforms = &r_uniforms;
 	r_actions.allow_readonly_buffers = p_allow_buffers;
+	r_actions.allow_shader_driven_instances = p_allow_shader_driven_instances;
 	r_actions.entry_point_stages["vertex"] = ShaderCompiler::STAGE_VERTEX;
 	r_actions.entry_point_stages["fragment"] = ShaderCompiler::STAGE_FRAGMENT;
 }
@@ -181,6 +183,138 @@ TEST_CASE("[Rendering][ShaderLanguage][BufferRD] Buffer-only material and backen
 	CHECK(accepted.uniforms.is_empty());
 	CHECK(uniforms["agents"].is_buffer());
 	CHECK_FALSE(uniforms["agents"].is_texture());
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][ShaderDriven] Spatial capability requires explicit backend opt-in") {
+	const String code = "shader_type spatial; render_mode shader_driven_instances; void vertex() { VERTEX *= 2.0; }";
+	ShaderLanguage language;
+	REQUIRE(language.compile(code, spatial_compile_info()) == OK);
+
+	ShaderCompiler compiler;
+	ShaderCompiler::IdentifierActions actions;
+	CHECK_FALSE(actions.allow_shader_driven_instances);
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+	initialize_compiler(compiler, actions, uniforms);
+	bool capable = false;
+	actions.render_mode_flags["shader_driven_instances"] = &capable;
+	ShaderCompiler::GeneratedCode rejected;
+	ERR_PRINT_OFF;
+	const Error unavailable = compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", rejected);
+	ERR_PRINT_ON;
+	CHECK(unavailable == ERR_UNAVAILABLE);
+	CHECK_FALSE(capable);
+	CHECK(rejected.code.is_empty());
+	CHECK(rejected.buffers.is_empty());
+
+	actions.allow_shader_driven_instances = true;
+	ShaderCompiler::GeneratedCode accepted;
+	REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", accepted) == OK);
+	CHECK(capable);
+	CHECK(accepted.code.has("vertex"));
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][ShaderDriven] Packed BufferRD IDs preserve draw-instance addressing") {
+	ShaderCompiler compiler;
+	ShaderCompiler::IdentifierActions actions;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+	initialize_compiler(compiler, actions, uniforms, true, true);
+	bool capable = false;
+	actions.render_mode_flags["shader_driven_instances"] = &capable;
+	const String code = "shader_type spatial;\n"
+			"render_mode shader_driven_instances, skip_vertex_transform;\n"
+			"uniform readonly_buffer visible_ids;\n"
+			"uniform readonly_buffer poses;\n"
+			"void vertex() {\n"
+			"uint draw_slot = uint(INSTANCE_ID);\n"
+			"uvec4 packed_ids = buffer_load(visible_ids, draw_slot >> 2u);\n"
+			"uint stable_slot = packed_ids[int(draw_slot & 3u)];\n"
+			"VERTEX.x = uintBitsToFloat(buffer_load(poses, stable_slot).x);\n"
+			"}\n";
+	ShaderCompiler::GeneratedCode generated;
+	REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", generated) == OK);
+	CHECK(capable);
+	REQUIRE(generated.buffers.size() == 2);
+	CHECK(generated.buffers[0].name == StringName("poses"));
+	CHECK(generated.buffers[1].name == StringName("visible_ids"));
+	CHECK(uniforms["poses"].is_buffer());
+	CHECK(uniforms["visible_ids"].is_buffer());
+	CHECK(generated.uniform_offsets.is_empty());
+	REQUIRE(generated.code.has("vertex"));
+	const String &vertex = generated.code["vertex"];
+	CHECK(vertex.count("INSTANCE_INDEX") == 1);
+	CHECK(vertex.contains("godot_buffer_load_m_visible_ids("));
+	CHECK(vertex.contains("m_draw_slot >> 2u"));
+	CHECK(vertex.contains("m_draw_slot & 3u"));
+	CHECK(vertex.contains("m_packed_ids["));
+	CHECK(vertex.contains("godot_buffer_load_m_poses(m_stable_slot)"));
+	CHECK(generated.stage_globals[ShaderCompiler::STAGE_VERTEX].contains("return uvec4(0u);"));
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][ShaderDriven] Canvas and particle shaders reject the spatial mode") {
+	const struct {
+		RSE::ShaderMode mode;
+		const char *code;
+	} cases[] = {
+		{ RSE::SHADER_CANVAS_ITEM, "shader_type canvas_item; render_mode shader_driven_instances;" },
+		{ RSE::SHADER_PARTICLES, "shader_type particles; render_mode shader_driven_instances;" },
+	};
+	for (const auto &test : cases) {
+		INFO(test.code);
+		ShaderLanguage::ShaderCompileInfo info;
+		info.functions = ShaderTypes::get_singleton()->get_functions(test.mode);
+		info.render_modes = ShaderTypes::get_singleton()->get_modes(test.mode);
+		info.stencil_modes = ShaderTypes::get_singleton()->get_stencil_modes(test.mode);
+		info.shader_types = ShaderTypes::get_singleton()->get_types();
+		ShaderLanguage language;
+		CHECK(language.compile(test.code, info) == ERR_PARSE_ERROR);
+	}
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][ShaderDriven] Backend permission does not leak between compiler clients") {
+	const String code = "shader_type spatial; render_mode shader_driven_instances; void vertex() { VERTEX *= 2.0; }";
+	ShaderCompiler compiler;
+	ShaderCompiler::IdentifierActions allowed;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> allowed_uniforms;
+	initialize_compiler(compiler, allowed, allowed_uniforms, false, true);
+	bool allowed_capability = false;
+	allowed.render_mode_flags["shader_driven_instances"] = &allowed_capability;
+	ShaderCompiler::GeneratedCode accepted;
+	REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, code, &allowed, "", accepted) == OK);
+	CHECK(allowed_capability);
+
+	ShaderCompiler::IdentifierActions ordinary_backend;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> ordinary_uniforms;
+	initialize_compiler(compiler, ordinary_backend, ordinary_uniforms, false);
+	bool ordinary_capability = false;
+	ordinary_backend.render_mode_flags["shader_driven_instances"] = &ordinary_capability;
+	ShaderCompiler::GeneratedCode rejected;
+	ERR_PRINT_OFF;
+	const Error unavailable = compiler.compile(RSE::SHADER_SPATIAL, code, &ordinary_backend, "", rejected);
+	ERR_PRINT_ON;
+	CHECK(unavailable == ERR_UNAVAILABLE);
+	CHECK_FALSE(ordinary_capability);
+	CHECK(rejected.code.is_empty());
+}
+
+TEST_CASE("[Rendering][ShaderLanguage][ShaderDriven] Ordinary vertex and billboard-style transforms do not opt in") {
+	const char *codes[] = {
+		"shader_type spatial; void vertex() { VERTEX *= 2.0; }",
+		"shader_type spatial; render_mode skip_vertex_transform; void vertex() { VERTEX = (VIEW_MATRIX * MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }",
+		"shader_type spatial; void vertex() { MODELVIEW_MATRIX = VIEW_MATRIX * MODEL_MATRIX; MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX); }",
+	};
+	ShaderCompiler compiler;
+	for (const char *code : codes) {
+		INFO(code);
+		ShaderCompiler::IdentifierActions actions;
+		HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+		initialize_compiler(compiler, actions, uniforms, false);
+		bool capable = false;
+		actions.render_mode_flags["shader_driven_instances"] = &capable;
+		ShaderCompiler::GeneratedCode generated;
+		REQUIRE(compiler.compile(RSE::SHADER_SPATIAL, code, &actions, "", generated) == OK);
+		CHECK_FALSE(capable);
+		CHECK(generated.buffers.is_empty());
+	}
 }
 
 } // namespace TestShaderLanguage
