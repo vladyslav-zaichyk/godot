@@ -1,0 +1,22 @@
+config_version=5
+
+[application]
+config/name="BufferRD Numeric Contract"
+run/main_scene="res://Main.tscn"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="BufferRD-v1-contract"
+
+[display]
+window/size/viewport_width=160
+window/size/viewport_height=96
+window/size/window_width_override=320
+window/size/window_height_override=192
+window/vsync/vsync_mode=0
+
+[dotnet]
+project/assembly_name="BufferRdLab"
+
+[rendering]
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="forward_plus"
+environment/defaults/default_clear_color=Color(0,0,0,1)
