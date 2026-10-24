@@ -155,6 +155,8 @@ public partial class Main : Node
     void AddOrdinary(Vector3 position, Vector3 scale, bool selected) {
         var owner = new MeshInstance3D { Mesh = _mesh, MaterialOverride = _wallMaterial, Position = position, Scale = scale, Layers = selected ? 2u : 1u,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        owner.Set("gi_mode", 0); // Explicit no-GI scope; default Static is ineligible.
+        Check(owner.Get("gi_mode").AsInt32() == 0, "Ordinary owner must disable GI.");
         _view!.AddChild(owner); if (selected) _walls.Add(owner);
     }
     void CreateResources()
@@ -284,7 +286,7 @@ public partial class Main : Node
                 Check(raw.ContainsKey("epoch") && raw.ContainsKey("selected") && raw.ContainsKey("reason") && raw.ContainsKey("early_surface_count"),"Incomplete native recording outcome.");
                 Check(raw["selected"].VariantType == Variant.Type.Bool && raw["selected"].AsBool() == probe.GetProperty("selected").GetBoolean(),"Native candidate/fallback decision differs.");
                 Check(raw["epoch"].AsInt64() == _previousEpoch && raw["configuration_generation"].AsInt64() == _previousGeneration,"Outcome differs from actual callback identity.");
-                Check(raw["early_surface_count"].AsInt32() == (wall?2:0),"Selected/unselected ordinary surfaces were not split correctly.");
+                Check(raw["early_surface_count"].AsInt32() == (wall?2:0),$"Selected/unselected ordinary surfaces were not split correctly. Expected={(wall?2:0)}; outcome={JsonSerializer.Serialize(Outcome(raw))}");
             } else if (raw.ContainsKey("selected")) Check(!raw["selected"].AsBool(),"Disabled view reused a candidate.");
             outcome = Outcome(raw);
             // Terminal evidence only: the producer and resumed native render have already been recorded.
