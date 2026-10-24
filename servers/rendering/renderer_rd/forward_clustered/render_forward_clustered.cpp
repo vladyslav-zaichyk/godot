@@ -57,15 +57,6 @@ using namespace RendererSceneRenderImplementation;
 
 #define FADE_ALPHA_PASS_THRESHOLD 0.999
 
-static bool _gpu_occlusion_projection_is_finite(const Projection &p_projection) {
-	for (uint32_t column = 0; column < 4; column++) {
-		if (!p_projection.columns[column].is_finite()) {
-			return false;
-		}
-	}
-	return true;
-}
-
 void RenderForwardClustered::RenderBufferDataForwardClustered::ensure_specular() {
 	ERR_FAIL_NULL(render_buffers);
 
@@ -2403,14 +2394,20 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 				return;
 			}
 		}
+		const Error camera_validation = GpuOcclusionMetadata::validate_camera(p_render_data->scene_data->cam_transform,
+				p_render_data->scene_data->cam_projection, p_render_data->scene_data->get_cam_projection(), p_render_data->scene_data->cam_orthogonal);
+		if (camera_validation == ERR_INVALID_PARAMETER) {
+			gpu_occlusion->set_outcome("invalid_camera");
+			gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+			return;
+		}
 		bool supported = false;
 #ifdef WINDOWS_ENABLED
 		supported = OS::get_singleton()->get_current_rendering_driver_name() == "vulkan" &&
 				gpu_occlusion_signature_counter != UINT64_MAX &&
 				gpu_occlusion->recording && gpu_occlusion->epoch > 0 && gpu_occlusion->configuration_generation > 0 &&
 				!is_reflection_probe && !has_primary_xr_interface && rb_data.is_valid() &&
-				p_render_data->scene_data->view_count == 1 && p_render_data->scene_data->cam_orthogonal &&
-				p_render_data->scene_data->cam_transform.is_finite() && _gpu_occlusion_projection_is_finite(p_render_data->scene_data->get_cam_projection()) &&
+				p_render_data->scene_data->view_count == 1 && camera_validation == OK &&
 				(p_render_data->render_region == Rect2i() || p_render_data->render_region == Rect2i(Point2i(), screen_size)) &&
 				screen_size.x > 0 && screen_size.y > 0 && screen_size == rb->get_target_size() &&
 				rb->get_scaling_3d_mode() == RSE::VIEWPORT_SCALING_3D_MODE_OFF &&
