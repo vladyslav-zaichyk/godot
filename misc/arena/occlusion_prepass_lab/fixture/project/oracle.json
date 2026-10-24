@@ -1,0 +1,33 @@
+{
+  "contract": "proxy-occlusion-oracle-v1",
+  "assembly": "OcclusionReferenceLab",
+  "inputs": ["OcclusionReferenceLab.csproj","project.godot","Main.tscn","Main.cs","ProbeLogger.cs","Depth.vert","Depth.frag","CopyDepth.comp","Reduce.comp","Produce.comp","oracle.json"],
+  "candidates": [
+    {"id":1000,"rect":[10,10,13,13],"depth":0.2,"flags":0},
+    {"id":1001,"rect":[42,10,45,13],"depth":0.2,"flags":0},
+    {"id":1002,"rect":[10,18,13,21],"depth":0.9,"flags":0},
+    {"id":1003,"rect":[29,10,33,13],"depth":0.2,"flags":0},
+    {"id":1004,"rect":[26,10,30,13],"depth":0.2,"flags":0},
+    {"id":1005,"rect":[0,10,3,13],"depth":0.2,"flags":0},
+    {"id":1006,"rect":[61,10,64,13],"depth":0.2,"flags":0},
+    {"id":1007,"rect":[10,24,13,27],"depth":0.999,"flags":0},
+    {"id":1008,"rect":[18,10,21,13],"depth":0.2,"flags":1},
+    {"id":1009,"rect":[10,2,13,5],"depth":0.2,"flags":2},
+    {"id":1010,"rect":[18,18,21,21],"depth":0.2,"flags":0},
+    {"id":1011,"rect":[50,18,53,21],"depth":0.2,"flags":0},
+    {"id":1012,"rect":[4,10,7,13],"depth":0.2,"flags":0},
+    {"id":1013,"rect":[10,10,13,13],"depth":0.6,"flags":0},
+    {"id":1014,"rect":[29,20,33,23],"depth":0.0,"flags":0},
+    {"id":1015,"rect":[-1,10,2,13],"depth":0.2,"flags":0}
+  ],
+  "cases": {
+    "wall_grid":[{"name":"wall","wall":true,"camera_shift":0,"depth_epoch":1,"query_epoch":1,"capacity":16}],
+    "open_scene":[{"name":"open","wall":false,"camera_shift":0,"depth_epoch":1,"query_epoch":1,"capacity":16}],
+    "camera_shift":[{"name":"shifted","wall":true,"camera_shift":4,"depth_epoch":2,"query_epoch":2,"capacity":16}],
+    "camera_cut":[{"name":"cut_fail_open","wall":true,"camera_shift":4,"depth_epoch":1,"query_epoch":2,"capacity":16},{"name":"cut_fresh","wall":true,"camera_shift":4,"depth_epoch":2,"query_epoch":2,"capacity":16}],
+    "stale_lists":[{"name":"old_wall","wall":true,"camera_shift":0,"depth_epoch":1,"query_epoch":1,"capacity":16},{"name":"current_clear","wall":false,"camera_shift":0,"depth_epoch":2,"query_epoch":2,"capacity":16}],
+    "lifetime":[{"name":"cycle0","wall":true,"camera_shift":0,"depth_epoch":1,"query_epoch":1,"capacity":16},{"name":"cycle1","wall":false,"camera_shift":0,"depth_epoch":2,"query_epoch":2,"capacity":16},{"name":"cycle2","wall":true,"camera_shift":4,"depth_epoch":3,"query_epoch":3,"capacity":16},{"name":"cycle3","wall":false,"camera_shift":4,"depth_epoch":4,"query_epoch":4,"capacity":16}],
+    "capacity_rejected":[{"name":"overflow","wall":true,"camera_shift":0,"depth_epoch":1,"query_epoch":1,"capacity":2}]
+  },
+  "not_qualified":["Native E13 depth ownership/hook/main pass integration does not exist","No perspective projection or general 3D AABB projection; caller supplies conservative orthographic rectangles","No native transparent, shadow, MSAA, XR, motion, multi-viewport or occluder eligibility proof","Serial sixteen-item compaction is not a production scan/allocator","Overflow is count0 plus explicit rejection, not native fallback proof","No FPS or physical VRAM result"]
+}

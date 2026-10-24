@@ -1,0 +1,16 @@
+#version 450
+layout(local_size_x=8, local_size_y=8, local_size_z=1) in;
+layout(set=0,binding=0,std430) buffer Pyramid { uint words[]; } pyramid;
+layout(push_constant,std430) uniform Reduction { uvec4 source; uvec4 destination; } pc;
+void main() {
+    uvec2 p = gl_GlobalInvocationID.xy;
+    if (p.x >= pc.destination.y || p.y >= pc.destination.z) return;
+    float minimum = 1.0;
+    for (uint y=0u; y<2u; y++) for (uint x=0u; x<2u; x++) {
+        uvec2 q = p*2u + uvec2(x,y);
+        float depth = (q.x < pc.source.y && q.y < pc.source.z)
+            ? uintBitsToFloat(pyramid.words[pc.source.x + q.y*pc.source.y + q.x]) : 0.0;
+        minimum = min(minimum,depth);
+    }
+    pyramid.words[pc.destination.x + p.y*pc.destination.y + p.x] = floatBitsToUint(minimum);
+}

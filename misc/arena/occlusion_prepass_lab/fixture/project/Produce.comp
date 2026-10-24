@@ -1,0 +1,41 @@
+#version 450
+// Serial deterministic compaction is intentional for this sixteen-item oracle.
+// This is not the production GPU scan/allocator or an FPS benchmark.
+layout(local_size_x=1,local_size_y=1,local_size_z=1) in;
+layout(set=0,binding=0,std430) readonly buffer Pyramid { uint words[]; } pyramid;
+layout(set=0,binding=1,std430) readonly buffer Candidates { uint words[]; } candidates;
+layout(set=0,binding=2,std430) buffer Visible { uint words[]; } visible;
+layout(set=0,binding=3,std430) buffer Commands { uint words[]; } commands;
+layout(push_constant,std430) uniform Publication { uint count; uint capacity; uint depth_epoch; uint query_epoch; } pc;
+const uint offsets[7] = uint[7](4u,2052u,2564u,2692u,2724u,2732u,2734u);
+bool is_visible(uint index) {
+    uint at = index*8u;
+    ivec4 rectangle = ivec4(candidates.words[at+1u],candidates.words[at+2u],candidates.words[at+3u],candidates.words[at+4u]);
+    float closest_depth = uintBitsToFloat(candidates.words[at+5u]);
+    if (pc.depth_epoch != pc.query_epoch || candidates.words[at+6u] != 0u ||
+        rectangle.x < 0 || rectangle.y < 0 || rectangle.z > 64 || rectangle.w > 32 ||
+        rectangle.z <= rectangle.x || rectangle.w <= rectangle.y ||
+        isnan(closest_depth) || isinf(closest_depth) || closest_depth < 0.0 || closest_depth > 1.0) return true;
+    // Inflate before querying. Anything outside this reference viewport fails open.
+    rectangle += ivec4(-1,-1,1,1);
+    if (rectangle.x < 0 || rectangle.y < 0 || rectangle.z > 64 || rectangle.w > 32) return true;
+    uint size = uint(max(rectangle.z-rectangle.x,rectangle.w-rectangle.y));
+    uint level=0u, block=1u;
+    while (block<size && level<6u) { block*=2u; level++; }
+    uvec2 lo = uvec2(rectangle.xy)/block;
+    uvec2 hi = uvec2(rectangle.zw-ivec2(1))/block;
+    uint width = max(1u,64u>>level);
+    float minimum = 1.0;
+    for (uint y=lo.y; y<=hi.y; y++) for (uint x=lo.x; x<=hi.x; x++)
+        minimum = min(minimum,uintBitsToFloat(pyramid.words[offsets[level]+y*width+x]));
+    return !(minimum > closest_depth + 0.00002);
+}
+void main() {
+    uint selected[16]; uint total=0u;
+    for (uint i=0u; i<pc.count; i++) if (is_visible(i)) selected[total++] = candidates.words[i*8u];
+    bool overflow = total>pc.capacity;
+    uint written = overflow ? 0u : total;
+    visible.words[4]=written; visible.words[5]=total; visible.words[6]=overflow?1u:0u; visible.words[7]=pc.query_epoch;
+    if (!overflow) for (uint i=0u; i<written; i++) visible.words[8u+i]=selected[i];
+    commands.words[4]=6u; commands.words[5]=written; commands.words[6]=0u; commands.words[7]=0u; commands.words[8]=0u;
+}

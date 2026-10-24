@@ -4,6 +4,12 @@ Status: proposed native contract and separate controlled reference source,
 2026-10-24. No native hook, new engine build or GPU result is supplied at this
 stage. The renderer agent's E12b editor and earlier controls remain immutable.
 
+Prepared matrix: 7 cases / 12 probes, 16 identities and 64x32 proxy depth.
+The C# consumer compiles against the exact E12b SDK; 25 CPU geometry/receipt
+checks pass. Compile-only native mode returns UNAVAILABLE (exit 4), and GPU mode
+without the A/B-release flag is rejected before creating output. These checks
+launch no Godot process. GLSL compilation and all GPU/native behavior are pending.
+
 [CONTRACT.md](CONTRACT.md) defines the proposed pass order, per-instance command
 publication, conservative depth proof, ownership, fallback and native acceptance.
 The key missing capability is selected native occluder depth followed by compute
