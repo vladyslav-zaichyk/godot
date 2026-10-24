@@ -49,6 +49,7 @@
 #include "core/templates/paged_allocator.h"
 #include "servers/rendering/rendering_context_driver.h"
 #include "servers/rendering/rendering_device_commons.h"
+#include "servers/rendering/rendering_device_indirect.h"
 
 class RenderingShaderContainer;
 class RenderingShaderContainerFormat;
@@ -91,6 +92,8 @@ class RenderingDeviceDriver : public RenderingDeviceCommons {
 	GDSOFTCLASS(RenderingDeviceDriver, RenderingDeviceCommons);
 
 public:
+	using IndirectDrawCapabilities = RenderingDeviceIndirect::Capabilities;
+
 	struct ID {
 		uint64_t id = 0;
 		_ALWAYS_INLINE_ ID() = default;
@@ -938,6 +941,7 @@ public:
 	virtual uint64_t get_lazily_memory_used() = 0;
 	virtual uint64_t limit_get(Limit p_limit) = 0;
 	virtual uint64_t api_trait_get(ApiTrait p_trait);
+	virtual IndirectDrawCapabilities get_indirect_draw_capabilities() const { return IndirectDrawCapabilities(); }
 	virtual bool supports_indirect_first_instance() const { return false; }
 	virtual bool has_feature(Features p_feature) = 0;
 	virtual const MultiviewCapabilities &get_multiview_capabilities() = 0;
