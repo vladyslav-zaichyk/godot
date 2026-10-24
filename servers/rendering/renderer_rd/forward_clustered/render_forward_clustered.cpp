@@ -30,6 +30,8 @@
 
 #include "render_forward_clustered.h"
 
+#include "core/os/os.h"
+
 #include "core/config/project_settings.h"
 #include "servers/rendering/renderer_rd/environment/fog.h"
 #include "servers/rendering/renderer_rd/framebuffer_cache_rd.h"
