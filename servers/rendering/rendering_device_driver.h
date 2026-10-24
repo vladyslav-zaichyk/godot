@@ -942,6 +942,8 @@ public:
 	virtual uint64_t limit_get(Limit p_limit) = 0;
 	virtual uint64_t api_trait_get(ApiTrait p_trait);
 	virtual IndirectDrawCapabilities get_indirect_draw_capabilities() const { return IndirectDrawCapabilities(); }
+	virtual bool has_indirect_draw_count() const { return false; }
+	virtual uint32_t get_indirect_draw_count_limit() const { return 0; }
 	virtual bool supports_indirect_first_instance() const { return false; }
 	virtual bool has_feature(Features p_feature) = 0;
 	virtual const MultiviewCapabilities &get_multiview_capabilities() = 0;

@@ -981,6 +981,16 @@ void RenderingDeviceGraph::_run_draw_list_command(RDD::CommandBufferID p_command
 				driver->command_render_draw_indexed_indirect(p_command_buffer, draw_indexed_indirect_instruction->buffer, draw_indexed_indirect_instruction->offset, draw_indexed_indirect_instruction->draw_count, draw_indexed_indirect_instruction->stride);
 				instruction_data_cursor += sizeof(DrawListDrawIndexedIndirectInstruction);
 			} break;
+			case DrawListInstruction::TYPE_DRAW_INDIRECT_COUNT:
+			case DrawListInstruction::TYPE_DRAW_INDEXED_INDIRECT_COUNT: {
+				const DrawListDrawIndirectCountInstruction *draw = reinterpret_cast<const DrawListDrawIndirectCountInstruction *>(instruction);
+				if (instruction->type == DrawListInstruction::TYPE_DRAW_INDEXED_INDIRECT_COUNT) {
+					driver->command_render_draw_indexed_indirect_count(p_command_buffer, draw->buffer, draw->offset, draw->count_buffer, draw->count_offset, draw->max_draw_count, draw->stride);
+				} else {
+					driver->command_render_draw_indirect_count(p_command_buffer, draw->buffer, draw->offset, draw->count_buffer, draw->count_offset, draw->max_draw_count, draw->stride);
+				}
+				instruction_data_cursor += sizeof(DrawListDrawIndirectCountInstruction);
+			} break;
 			case DrawListInstruction::TYPE_EXECUTE_COMMANDS: {
 				const DrawListExecuteCommandsInstruction *execute_commands_instruction = reinterpret_cast<const DrawListExecuteCommandsInstruction *>(instruction);
 				driver->command_buffer_execute_secondary(p_command_buffer, execute_commands_instruction->command_buffer);
@@ -1573,6 +1583,12 @@ void RenderingDeviceGraph::_print_draw_list(const uint8_t *p_instruction_data, u
 				const DrawListDrawIndexedIndirectInstruction *draw_indexed_indirect_instruction = reinterpret_cast<const DrawListDrawIndexedIndirectInstruction *>(instruction);
 				print_line("\tDRAW INDEXED INDIRECT BUFFER ID", itos(draw_indexed_indirect_instruction->buffer.id), "OFFSET", draw_indexed_indirect_instruction->offset, "DRAW COUNT", draw_indexed_indirect_instruction->draw_count, "STRIDE", draw_indexed_indirect_instruction->stride);
 				instruction_data_cursor += sizeof(DrawListDrawIndexedIndirectInstruction);
+			} break;
+			case DrawListInstruction::TYPE_DRAW_INDIRECT_COUNT:
+			case DrawListInstruction::TYPE_DRAW_INDEXED_INDIRECT_COUNT: {
+				const DrawListDrawIndirectCountInstruction *draw = reinterpret_cast<const DrawListDrawIndirectCountInstruction *>(instruction);
+				print_line("\tDRAW INDIRECT COUNT", "INDEXED", instruction->type == DrawListInstruction::TYPE_DRAW_INDEXED_INDIRECT_COUNT, "BUFFER", itos(draw->buffer.id), "OFFSET", draw->offset, "COUNTER", itos(draw->count_buffer.id), "COUNTER OFFSET", draw->count_offset, "MAXIMUM", draw->max_draw_count, "STRIDE", draw->stride);
+				instruction_data_cursor += sizeof(DrawListDrawIndirectCountInstruction);
 			} break;
 			case DrawListInstruction::TYPE_EXECUTE_COMMANDS: {
 				print_line("\tEXECUTE COMMANDS");
@@ -2244,6 +2260,18 @@ void RenderingDeviceGraph::add_draw_list_draw_indexed_indirect(RDD::BufferID p_b
 	draw_instruction_list.stages.set_flag(RDD::PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 }
 
+void RenderingDeviceGraph::add_draw_list_draw_indirect_count(bool p_use_indices, RDD::BufferID p_buffer, uint32_t p_offset, RDD::BufferID p_count_buffer, uint32_t p_count_offset, uint32_t p_max_draw_count, uint32_t p_stride) {
+	DrawListDrawIndirectCountInstruction *instruction = reinterpret_cast<DrawListDrawIndirectCountInstruction *>(_allocate_draw_list_instruction(sizeof(DrawListDrawIndirectCountInstruction)));
+	instruction->type = p_use_indices ? DrawListInstruction::TYPE_DRAW_INDEXED_INDIRECT_COUNT : DrawListInstruction::TYPE_DRAW_INDIRECT_COUNT;
+	instruction->buffer = p_buffer;
+	instruction->offset = p_offset;
+	instruction->count_buffer = p_count_buffer;
+	instruction->count_offset = p_count_offset;
+	instruction->max_draw_count = p_max_draw_count;
+	instruction->stride = p_stride;
+	draw_instruction_list.stages.set_flag(RDD::PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+}
+
 void RenderingDeviceGraph::add_draw_list_execute_commands(RDD::CommandBufferID p_command_buffer) {
 	DrawListExecuteCommandsInstruction *instruction = reinterpret_cast<DrawListExecuteCommandsInstruction *>(_allocate_draw_list_instruction(sizeof(DrawListExecuteCommandsInstruction)));
 	instruction->type = DrawListInstruction::TYPE_EXECUTE_COMMANDS;
@@ -2295,6 +2323,11 @@ void RenderingDeviceGraph::add_draw_list_uniform_set_prepare_for_use(RDD::Shader
 	instruction->shader = p_shader;
 	instruction->uniform_set = p_uniform_set;
 	instruction->set_index = set_index;
+}
+
+bool RenderingDeviceGraph::is_draw_list_usage_compatible(const ResourceTracker *p_tracker, ResourceUsage p_usage) const {
+	// A rejected API call must not reset a tracker or alter this list.
+	return p_tracker == nullptr || p_tracker->command_frame != tracking_frame || p_tracker->draw_list_index != draw_instruction_list.index || p_tracker->draw_list_usage == p_usage;
 }
 
 void RenderingDeviceGraph::add_draw_list_usage(ResourceTracker *p_tracker, ResourceUsage p_usage) {

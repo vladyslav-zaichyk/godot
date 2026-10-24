@@ -1,0 +1,22 @@
+#version 450
+layout(local_size_x=8) in;
+layout(set=0,binding=0,std430) buffer Commands { uint commands[]; };
+layout(set=0,binding=1,std430) buffer Counter { uint counter[]; };
+layout(push_constant,std430) uniform Parameters {
+    uint command_word_offset; uint count_word_offset; uint stride_words; uint record_count;
+    uint raw_count; uint operation; uint indexed; uint unused;
+} pc;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (pc.operation == 1u) {
+        if (i == 0u) counter[pc.count_word_offset] = pc.raw_count;
+        return;
+    }
+    if (i >= pc.record_count) return;
+    uint word = pc.command_word_offset + i * pc.stride_words;
+    commands[word] = 6u;
+    commands[word + 1u] = 1u;
+    commands[word + 2u] = pc.indexed != 0u ? 0u : i * 6u;
+    commands[word + 3u] = pc.indexed != 0u ? i * 6u : 0u;
+    if (pc.indexed != 0u) commands[word + 4u] = 0u;
+}

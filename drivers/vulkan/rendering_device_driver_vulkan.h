@@ -117,6 +117,8 @@ class RenderingDeviceDriverVulkan : public RenderingDeviceDriver {
 		PFN_vkQueuePresentKHR QueuePresentKHR = nullptr;
 		PFN_vkCreateRenderPass2KHR CreateRenderPass2KHR = nullptr;
 		PFN_vkCmdEndRenderPass2KHR EndRenderPass2KHR = nullptr;
+		PFN_vkCmdDrawIndirectCountKHR CmdDrawIndirectCountKHR = nullptr;
+		PFN_vkCmdDrawIndexedIndirectCountKHR CmdDrawIndexedIndirectCountKHR = nullptr;
 
 		// Debug marker extensions.
 		PFN_vkCmdDebugMarkerBeginEXT CmdDebugMarkerBeginEXT = nullptr;
@@ -149,6 +151,7 @@ class RenderingDeviceDriverVulkan : public RenderingDeviceDriver {
 	VkPhysicalDeviceFeatures requested_device_features = {};
 	HashMap<CharString, bool> requested_device_extensions;
 	HashSet<CharString> enabled_device_extension_names;
+	bool indirect_draw_count_supported = false;
 	TightLocalVector<TightLocalVector<Queue>> queue_families;
 	TightLocalVector<VkQueueFamilyProperties> queue_family_properties;
 	RDD::Capabilities device_capabilities;
@@ -796,6 +799,10 @@ public:
 	virtual uint64_t api_trait_get(ApiTrait p_trait) override final;
 	virtual IndirectDrawCapabilities get_indirect_draw_capabilities() const override final {
 		return { requested_device_features.multiDrawIndirect ? physical_device_properties.limits.maxDrawIndirectCount : 1, IndirectDrawCapabilities::STRIDE_VULKAN };
+	}
+	virtual bool has_indirect_draw_count() const override final { return indirect_draw_count_supported; }
+	virtual uint32_t get_indirect_draw_count_limit() const override final {
+		return indirect_draw_count_supported ? physical_device_properties.limits.maxDrawIndirectCount : 0;
 	}
 	virtual bool supports_indirect_first_instance() const override final { return requested_device_features.drawIndirectFirstInstance != VK_FALSE; }
 	virtual bool has_feature(Features p_feature) override final;
