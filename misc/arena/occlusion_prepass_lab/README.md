@@ -5,11 +5,11 @@ Status: experimental native implementation and separate controlled consumers,
 separate receipts. The renderer agent's E12b editor and earlier controls remain
 immutable. This source alone does not establish a successful build or GPU result.
 
-Prepared matrix: 7 cases / 12 probes, 16 identities and 64x32 proxy depth.
-The C# consumer compiles against the exact E12b SDK; 25 CPU geometry/receipt
-checks pass. Compile-only native mode returns UNAVAILABLE (exit 4), and GPU mode
-without the A/B-release flag is rejected before creating output. These checks
-launch no Godot process. GLSL compilation and all GPU/native behavior are pending.
+The earlier proxy reference prepares 7 cases / 12 probes, 16 identities and
+64x32 caller-owned depth. That consumer compiles against the exact E12b SDK;
+25 CPU geometry/receipt checks pass. Its intentionally unavailable native mode
+returns UNAVAILABLE (exit 4). The new native consumer is separate below.
+GLSL compilation and all GPU/native behavior remain pending real-GPU execution.
 
 [CONTRACT.md](CONTRACT.md) defines the accepted pass order, per-instance command
 publication, conservative depth proof, ownership, fallback and native acceptance.
@@ -73,3 +73,9 @@ The callback is a restricted recording contract, not a sandbox for arbitrary
 scene, shader or native vertex-buffer mutations. No native shader execution,
 barrier correctness, pixels, lifetime, FPS or physical VRAM claim follows from
 CPU or managed compilation.
+
+The native Windows editor, matching .NET API and 115 CPU native contracts pass
+on source `4010f6133b6e7ea4473250c739a012fa33a2d16a`; exact generated SDK:
+`4.7.2-arena-dev-g4010f6133b`. The native stand's 16 CPU oracle/receipt checks
+also pass. Consumer compilation and artifact integrity have their own bundle
+receipts. None of these checks runs the native GPU scene.
