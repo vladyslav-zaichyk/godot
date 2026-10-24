@@ -157,7 +157,7 @@ def main():
                         'NUGET_HTTP_CACHE_PATH': 'nuget-http', 'NUGET_PLUGINS_CACHE_PATH': 'nuget-plugins',
                         'NUGET_SCRATCH': 'nuget-scratch'}.items():
         path = work / folder
-        path.mkdir()
+        path.mkdir(exist_ok=True)
         env[key] = str(path)
     config = work / 'NuGet.Config'
     config.write_bytes(('<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear />'
