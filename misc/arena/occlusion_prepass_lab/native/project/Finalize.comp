@@ -1,0 +1,12 @@
+#version 450
+layout(local_size_x=1,local_size_y=1,local_size_z=1) in;
+layout(set=0,binding=0,std430) readonly buffer Stats { uint words[]; } stats;
+layout(set=0,binding=1,std430) buffer Command { uint words[]; } command;
+void main() {
+    // GPU overflow publishes the entire immutable fallback, never a truncated prefix.
+    bool overflow=stats.words[6]!=0u;
+    command.words[4]=6u;
+    command.words[5]=overflow?16u:stats.words[4];
+    command.words[6]=0u;command.words[7]=0u;
+    command.words[8]=overflow?0u:16u;
+}

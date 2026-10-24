@@ -1,0 +1,20 @@
+{
+  "contract": "native-occlusion-oracle-v1",
+  "width": 64, "height": 32, "logical_slots": 16, "draw_slot_capacity": 32,
+  "cases": [
+    {"name":"wall_uncull","enabled":false,"wall":true,"shift":0,"publication":"normal","ack":"ok","selected":false},
+    {"name":"wall_candidate","enabled":true,"wall":true,"shift":0,"publication":"normal","ack":"ok","selected":true},
+    {"name":"error_fallback","enabled":true,"wall":true,"shift":0,"publication":"zero","ack":"error","selected":false},
+    {"name":"stale_fallback","enabled":true,"wall":true,"shift":0,"publication":"zero","ack":"stale","selected":false},
+    {"name":"missing_fallback","enabled":true,"wall":true,"shift":0,"publication":"zero","ack":"missing","selected":false},
+    {"name":"zero_candidate","enabled":true,"wall":true,"shift":0,"publication":"zero","ack":"ok","selected":true},
+    {"name":"overflow_gpu_fallback","enabled":true,"wall":true,"shift":0,"publication":"overflow","ack":"ok","selected":true},
+    {"name":"recovery","enabled":true,"wall":true,"shift":0,"publication":"normal","ack":"ok","selected":true},
+    {"name":"open_uncull","enabled":false,"wall":false,"shift":0,"publication":"normal","ack":"ok","selected":false},
+    {"name":"open_candidate","enabled":true,"wall":false,"shift":0,"publication":"normal","ack":"ok","selected":true},
+    {"name":"shift_wall","enabled":true,"wall":true,"shift":4,"publication":"normal","ack":"ok","selected":true},
+    {"name":"shift_current_clear","enabled":true,"wall":false,"shift":4,"publication":"normal","ack":"ok","selected":true},
+    {"name":"wall_returns","enabled":true,"wall":true,"shift":0,"publication":"normal","ack":"ok","selected":true},
+    {"name":"feature_cleared","enabled":false,"wall":true,"shift":0,"publication":"normal","ack":"ok","selected":false}
+  ]
+}
