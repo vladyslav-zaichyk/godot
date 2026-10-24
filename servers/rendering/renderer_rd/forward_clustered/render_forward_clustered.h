@@ -31,6 +31,7 @@
 #pragma once
 
 #include "core/templates/paged_allocator.h"
+#include "servers/rendering/gpu_occlusion_prepass.h"
 #include "servers/rendering/multi_uma_buffer.h"
 #include "servers/rendering/renderer_rd/cluster_builder_rd.h"
 #include "servers/rendering/renderer_rd/effects/fsr2.h"
@@ -219,6 +220,11 @@ private:
 	struct GeometryInstanceSurfaceDataCache;
 	struct RenderElementInfo;
 
+	struct GpuOcclusionDrawSelection {
+		RID commands;
+		uint32_t byte_offset = 0;
+	};
+
 	struct RenderListParameters {
 		GeometryInstanceSurfaceDataCache **elements = nullptr;
 		RenderElementInfo *element_info = nullptr;
@@ -229,6 +235,10 @@ private:
 		bool no_gi = false;
 		bool motion_vectors_required = false; // Demand of this view, including depth passes.
 		bool allow_counted_instances = false; // Explicit main single-view opaque/depth purpose only.
+		const HashMap<RenderGeometryInstance *, GpuOcclusionDrawSelection> *gpu_occlusion_selection = nullptr;
+		const LocalVector<uint8_t> *gpu_occlusion_early_surfaces = nullptr;
+		bool gpu_occlusion_draw_early = false;
+		bool *gpu_occlusion_submission_failed = nullptr;
 		uint32_t view_count = 1;
 		RID render_pass_uniform_set;
 		bool force_wireframe = false;
@@ -476,6 +486,7 @@ private:
 	_FORCE_INLINE_ void _render_list_template(RenderingDevice::DrawListID p_draw_list, RenderingDevice::FramebufferFormatID p_framebuffer_Format, RenderListParameters *p_params, uint32_t p_from_element, uint32_t p_to_element);
 	void _render_list(RenderingDevice::DrawListID p_draw_list, RenderingDevice::FramebufferFormatID p_framebuffer_Format, RenderListParameters *p_params, uint32_t p_from_element, uint32_t p_to_element);
 	void _render_list_with_draw_list(RenderListParameters *p_params, RID p_framebuffer, BitField<RD::DrawFlags> p_draw_flags = RD::DRAW_DEFAULT_ALL, const Vector<Color> &p_clear_color_values = Vector<Color>(), float p_clear_depth_value = 0.0, uint32_t p_clear_stencil_value = 0, const Rect2 &p_region = Rect2());
+	bool _gpu_occlusion_occluder_eligible(const GeometryInstanceSurfaceDataCache *p_surface, uint32_t p_layer_mask) const;
 
 	void _fill_instance_data(RenderListType p_render_list, int *p_render_info = nullptr, uint32_t p_offset = 0, int32_t p_max_elements = -1, bool p_update_buffer = true);
 	void _fill_render_list(RenderListType p_render_list, const RenderDataRD *p_render_data, PassMode p_pass_mode, bool p_using_sdfgi = false, bool p_using_opaque_gi = false, bool p_using_motion_pass = false, bool p_append = false);
@@ -559,6 +570,7 @@ private:
 
 	class GeometryInstanceForwardClustered : public RenderGeometryInstanceBase {
 	public:
+		uint64_t gpu_occlusion_signature = 0;
 		// lightmap
 		RID lightmap_instance;
 		Rect2 lightmap_uv_scale;
@@ -628,6 +640,8 @@ private:
 	PagedAllocator<GeometryInstanceForwardClustered> geometry_instance_alloc;
 	PagedAllocator<GeometryInstanceSurfaceDataCache> geometry_instance_surface_alloc;
 	PagedAllocator<GeometryInstanceLightmapSH> geometry_instance_lightmap_sh;
+	uint64_t gpu_occlusion_signature_counter = 0;
+	void _gpu_occlusion_mark_metadata_changed(GeometryInstanceForwardClustered *p_instance);
 
 	struct SurfacePipelineData {
 		void *mesh_surface = nullptr;
@@ -819,6 +833,8 @@ protected:
 
 public:
 	static RenderForwardClustered *get_singleton() { return singleton; }
+
+	Error gpu_occlusion_validate_consumer(RenderGeometryInstance *p_instance, const GpuOcclusionConsumer &p_consumer, uint64_t *r_signature = nullptr, Vector<RID> *r_shader_buffers = nullptr);
 
 	ClusterBuilderSharedDataRD *get_cluster_builder_shared() { return &cluster_builder_shared; }
 	RendererRD::SSEffects *get_ss_effects() { return ss_effects; }

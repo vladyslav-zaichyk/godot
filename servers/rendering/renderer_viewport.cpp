@@ -45,6 +45,13 @@
 #include "servers/rendering/rendering_server_globals.h"
 #include "servers/rendering/storage/texture_storage.h"
 
+#ifndef _3D_DISABLED
+#include "servers/rendering/renderer_rd/forward_clustered/render_forward_clustered.h"
+#include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
+#include "servers/rendering/renderer_rd/storage_rd/mesh_storage.h"
+#include "servers/rendering/renderer_scene_cull.h"
+#endif
+
 #ifndef XR_DISABLED
 #include "servers/xr/xr_interface.h"
 #include "servers/xr/xr_server.h"
@@ -305,6 +312,22 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 void RendererViewport::_draw_3d(Viewport *p_viewport) {
 #ifndef _3D_DISABLED
 	RENDER_TIMESTAMP("> Render 3D Scene");
+	// Recording identity belongs to this actual viewport render, including a
+	// render which later proves ineligible. Never inherit candidate selection.
+	Ref<GpuOcclusionPrepassState> gpu_state = p_viewport->gpu_occlusion_prepass_state;
+	if (p_viewport->render_buffers.is_valid()) {
+		p_viewport->render_buffers->set_gpu_occlusion_prepass_state(gpu_state);
+	}
+	const bool gpu_recording = gpu_state.is_valid() && gpu_state->begin_recording(p_viewport->self);
+	struct RecordingGuard {
+		Ref<GpuOcclusionPrepassState> state;
+		bool active = false;
+		~RecordingGuard() {
+			if (active) {
+				state->recording = false;
+			}
+		}
+	} recording_guard{ gpu_state, gpu_recording };
 
 	Ref<XRInterface> xr_interface;
 #ifndef XR_DISABLED
@@ -982,6 +1005,212 @@ void RendererViewport::draw_viewports(bool p_swap_buffers) {
 			RSG::rasterizer->blit_render_targets_to_screen(E.key, E.value.ptr(), E.value.size());
 		}
 	}
+}
+
+Error RendererViewport::viewport_configure_gpu_occlusion_prepass(RID p_viewport, uint32_t p_occluder_layer_mask, const Callable &p_producer) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	if (!viewport) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (is_gpu_occlusion_recording()) {
+		return ERR_BUSY;
+	}
+	if (!p_producer.is_valid()) {
+		return ERR_INVALID_PARAMETER;
+	}
+#if defined(WINDOWS_ENABLED) && !defined(_3D_DISABLED)
+	RD *rd = RD::get_singleton();
+	if (sizeof(void *) != 8 || !rd || OS::get_singleton()->get_current_rendering_method() != "forward_plus" || OS::get_singleton()->get_current_rendering_driver_name() != "vulkan" ||
+			!RendererSceneRenderImplementation::RenderForwardClustered::get_singleton() || !rd->get_device_driver()->supports_indirect_first_instance() ||
+			viewport->view_count != 1 || viewport->use_xr || viewport->msaa_3d != RSE::VIEWPORT_MSAA_DISABLED || viewport->use_taa || viewport->force_motion_vectors ||
+			viewport->scaling_3d_scale != 1.0f || (viewport->scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_OFF && viewport->scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_BILINEAR && viewport->scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_NEAREST) || viewport->debug_draw != RSE::VIEWPORT_DEBUG_DRAW_DISABLED) {
+		return ERR_UNAVAILABLE;
+	}
+#else
+	return ERR_UNAVAILABLE;
+#endif
+	if (gpu_occlusion_viewport.is_valid() && gpu_occlusion_viewport != p_viewport) {
+		return ERR_ALREADY_IN_USE;
+	}
+	Ref<GpuOcclusionPrepassState> state = viewport->gpu_occlusion_prepass_state;
+	if (state.is_null()) {
+		state.instantiate();
+	}
+	if (state->configuration_generation >= INT64_MAX) {
+		return ERR_UNAVAILABLE;
+	}
+	state->configuration_generation++;
+	state->viewport = p_viewport;
+	state->layer_mask = p_occluder_layer_mask;
+	state->producer = p_producer;
+	state->set_outcome("CONFIGURED");
+	viewport->gpu_occlusion_prepass_state = state;
+	gpu_occlusion_viewport = p_viewport;
+	return OK;
+}
+
+Error RendererViewport::viewport_register_gpu_occlusion_consumer(RID p_viewport, RID p_geometry_instance, RID p_identity_bank, int64_t p_candidate_identity_base, RID p_candidate_commands, int64_t p_candidate_command_byte_offset, int64_t p_logical_slot_capacity) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	if (!viewport) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (is_gpu_occlusion_recording()) {
+		return ERR_BUSY;
+	}
+	Ref<GpuOcclusionPrepassState> state = viewport->gpu_occlusion_prepass_state;
+	if (state.is_null() || !state->producer.is_valid() || gpu_occlusion_viewport != p_viewport) {
+		return ERR_INVALID_PARAMETER;
+	}
+#if defined(WINDOWS_ENABLED) && !defined(_3D_DISABLED)
+	RD *rd = RD::get_singleton();
+	auto *renderer = RendererSceneRenderImplementation::RenderForwardClustered::get_singleton();
+	auto *mesh_storage = RendererRD::MeshStorage::get_singleton();
+	if (!rd || !renderer || !mesh_storage || OS::get_singleton()->get_current_rendering_method() != "forward_plus" || OS::get_singleton()->get_current_rendering_driver_name() != "vulkan") {
+		return ERR_UNAVAILABLE;
+	}
+	RenderGeometryInstance *geometry = static_cast<RendererSceneCull *>(RSG::scene)->instance_get_render_geometry_instance(p_geometry_instance, viewport->scenario);
+	if (!geometry || viewport->scenario.is_null()) {
+		return ERR_INVALID_PARAMETER;
+	}
+	auto *base = static_cast<RenderGeometryInstanceBase *>(geometry);
+	if (!base->data || !mesh_storage->owns_multimesh(base->data->base)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	GpuOcclusionConsumer candidate;
+	candidate.instance = p_geometry_instance;
+	candidate.identity_bank = p_identity_bank;
+	candidate.candidate_identity_base = p_candidate_identity_base;
+	candidate.candidate_commands = p_candidate_commands;
+	candidate.candidate_command_byte_offset = p_candidate_command_byte_offset;
+	candidate.logical_slot_capacity = p_logical_slot_capacity;
+	candidate.multimesh = base->data->base;
+	candidate.draw_slot_capacity = mesh_storage->multimesh_get_instance_count(candidate.multimesh);
+	candidate.fallback_commands = mesh_storage->multimesh_get_command_buffer_rd_rid(candidate.multimesh);
+	candidate.fallback_command_byte_offset = mesh_storage->multimesh_get_command_byte_offset(candidate.multimesh);
+	Error error = GpuOcclusionMetadata::validate_consumer_numbers(p_candidate_identity_base, p_logical_slot_capacity, candidate.draw_slot_capacity, p_candidate_command_byte_offset);
+	if (error != OK || candidate.fallback_command_byte_offset < 0 || candidate.fallback_command_byte_offset > INT32_MAX || candidate.fallback_command_byte_offset % 4 != 0) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const uint64_t identity_bytes = (uint64_t(p_candidate_identity_base) + uint64_t(p_logical_slot_capacity)) * sizeof(uint32_t);
+	if (!rd->storage_buffer_is_nonpersistent(p_identity_bank, identity_bytes, false, sizeof(uint32_t)) ||
+			!rd->storage_buffer_is_nonpersistent(p_candidate_commands, uint64_t(p_candidate_command_byte_offset) + 20, true) ||
+			!rd->storage_buffer_is_nonpersistent(candidate.fallback_commands, uint64_t(candidate.fallback_command_byte_offset) + 20, true) ||
+			(p_candidate_commands == candidate.fallback_commands && GpuOcclusionMetadata::intervals_overlap(p_candidate_command_byte_offset, 20, candidate.fallback_command_byte_offset, 20))) {
+		return ERR_INVALID_PARAMETER;
+	}
+	// Material parameter changes are queued independently of geometry caches.
+	RendererRD::MaterialStorage::get_singleton()->_update_queued_materials();
+	error = renderer->gpu_occlusion_validate_consumer(geometry, candidate, &candidate.renderer_signature, &candidate.shader_buffers);
+	if (error != OK) {
+		return error;
+	}
+	if (candidate.renderer_signature == 0 || candidate.candidate_commands == candidate.identity_bank || candidate.fallback_commands == candidate.identity_bank ||
+			candidate.shader_buffers.has(candidate.candidate_commands) || candidate.shader_buffers.has(candidate.fallback_commands)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	int replacement = -1;
+	for (int i = 0; i < state->consumers.size(); i++) {
+		if (state->consumers[i].instance == p_geometry_instance) {
+			replacement = i;
+			continue;
+		}
+		if (GpuOcclusionMetadata::consumers_conflict(candidate, state->consumers[i])) {
+			return ERR_ALREADY_IN_USE;
+		}
+	}
+	if (replacement < 0 && state->consumers.size() >= 64) {
+		return ERR_ALREADY_IN_USE;
+	}
+	if (state->configuration_generation >= INT64_MAX) {
+		return ERR_UNAVAILABLE;
+	}
+	if (replacement >= 0) {
+		state->consumers.write[replacement] = candidate;
+	} else {
+		state->consumers.push_back(candidate);
+	}
+	state->configuration_generation++;
+	state->set_outcome("REGISTERED");
+	return OK;
+#else
+	return ERR_UNAVAILABLE;
+#endif
+}
+
+Error RendererViewport::viewport_unregister_gpu_occlusion_consumer(RID p_viewport, RID p_geometry_instance) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	if (!viewport) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (is_gpu_occlusion_recording()) {
+		return ERR_BUSY;
+	}
+	Ref<GpuOcclusionPrepassState> state = viewport->gpu_occlusion_prepass_state;
+	if (state.is_null()) {
+		return ERR_INVALID_PARAMETER;
+	}
+	for (int i = 0; i < state->consumers.size(); i++) {
+		if (state->consumers[i].instance == p_geometry_instance) {
+			if (state->configuration_generation >= INT64_MAX) {
+				return ERR_UNAVAILABLE;
+			}
+			state->consumers.remove_at(i);
+			state->configuration_generation++;
+			state->set_outcome("UNREGISTERED");
+			return OK;
+		}
+	}
+	return ERR_INVALID_PARAMETER;
+}
+
+Error RendererViewport::viewport_clear_gpu_occlusion_prepass(RID p_viewport) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	if (!viewport) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (is_gpu_occlusion_recording()) {
+		return ERR_BUSY;
+	}
+	Ref<GpuOcclusionPrepassState> state = viewport->gpu_occlusion_prepass_state;
+	if (state.is_valid()) {
+		if (state->configuration_generation >= INT64_MAX) {
+			return ERR_UNAVAILABLE;
+		}
+		state->configuration_generation++;
+		state->producer = Callable();
+		state->consumers.clear();
+		state->layer_mask = 0;
+		state->set_outcome("CLEARED");
+	}
+	if (gpu_occlusion_viewport == p_viewport) {
+		gpu_occlusion_viewport = RID();
+	}
+	return OK;
+}
+
+Dictionary RendererViewport::viewport_get_gpu_occlusion_prepass_outcome(RID p_viewport) const {
+	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	return viewport && viewport->gpu_occlusion_prepass_state.is_valid() ? viewport->gpu_occlusion_prepass_state->outcome.duplicate(true) : Dictionary();
+}
+
+Ref<GpuOcclusionPrepassState> RendererViewport::viewport_get_gpu_occlusion_prepass_state(RID p_viewport) const {
+	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	return viewport ? viewport->gpu_occlusion_prepass_state : Ref<GpuOcclusionPrepassState>();
+}
+
+bool RendererViewport::is_gpu_occlusion_recording() const {
+	const Viewport *viewport = viewport_owner.get_or_null(gpu_occlusion_viewport);
+	return viewport && viewport->gpu_occlusion_prepass_state.is_valid() && viewport->gpu_occlusion_prepass_state->recording;
+}
+
+bool RendererViewport::reject_gpu_occlusion_free() {
+	if (!is_gpu_occlusion_recording()) {
+		return false;
+	}
+	if (RD::get_singleton()) {
+		RD::get_singleton()->compute_callback_reject_operation();
+	}
+	return true;
 }
 
 RID RendererViewport::viewport_allocate() {
@@ -1663,6 +1892,12 @@ void RendererViewport::viewport_set_vrs_texture(RID p_viewport, RID p_texture) {
 bool RendererViewport::free(RID p_rid) {
 	if (viewport_owner.owns(p_rid)) {
 		Viewport *viewport = viewport_owner.get_or_null(p_rid);
+		if (reject_gpu_occlusion_free()) {
+			return true;
+		}
+		if (gpu_occlusion_viewport == p_rid) {
+			gpu_occlusion_viewport = RID();
+		}
 
 		RSG::texture_storage->render_target_free(viewport->render_target);
 		RSG::light_storage->shadow_atlas_free(viewport->shadow_atlas);

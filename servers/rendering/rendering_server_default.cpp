@@ -50,6 +50,9 @@ int RenderingServerDefault::changes = 0;
 /* FREE */
 
 void RenderingServerDefault::_free(RID p_rid) {
+	if (RSG::viewport && RSG::viewport->reject_gpu_occlusion_free()) {
+		return;
+	}
 	if (unlikely(p_rid.is_null())) {
 		return;
 	}

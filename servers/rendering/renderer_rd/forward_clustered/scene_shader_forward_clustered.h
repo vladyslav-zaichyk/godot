@@ -259,6 +259,8 @@ public:
 		bool unshaded = false;
 		bool uses_vertex = false;
 		bool uses_position = false;
+		bool writes_fragment_depth = false;
+		bool skips_vertex_transform = false;
 		bool uses_sss = false;
 		bool uses_transmittance = false;
 		bool uses_screen_texture = false;

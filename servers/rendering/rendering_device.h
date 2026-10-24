@@ -1025,6 +1025,9 @@ private:
 public:
 	// Internal validation for borrowed native-renderer storage. Does not read GPU data.
 	bool storage_buffer_is_valid(RID p_buffer, uint64_t p_minimum_size, bool p_require_indirect = false, uint64_t p_size_multiple = 1);
+	// Native GPU-producer metadata query; unlike the general BufferRD validator,
+	// dynamic persistent storage is unsuitable for these borrowed output banks.
+	bool storage_buffer_is_nonpersistent(RID p_buffer, uint64_t p_minimum_size, bool p_require_indirect = false, uint64_t p_size_multiple = 1);
 	RenderingDeviceDriver *get_device_driver() const { return driver; }
 	RenderingContextDriver *get_context_driver() const { return context; }
 
@@ -1691,11 +1694,20 @@ private:
 
 	ComputeList compute_list;
 	ComputeList::State compute_list_barrier_state;
+	bool compute_callback_scope_active = false;
+	bool compute_callback_scope_violated = false;
+	bool compute_callback_scope_internal = false;
+	bool _reject_compute_callback_operation();
 	bool _compute_list_uniform_set_has_indirect_alias(const UniformSet *p_uniform_set) const;
 	Error _compute_list_validate_uniform_sets(const Buffer *p_arguments = nullptr);
 
 public:
 	ComputeListID compute_list_begin();
+	// Native renderer-only scope. Not exposed through ClassDB: callback code
+	// receives the existing list token and cannot close/reopen the scope.
+	ComputeListID compute_list_begin_callback_scope();
+	bool compute_list_end_callback_scope();
+	bool compute_callback_reject_operation();
 	void compute_list_bind_compute_pipeline(ComputeListID p_list, RID p_compute_pipeline);
 	void compute_list_bind_uniform_set(ComputeListID p_list, RID p_uniform_set, uint32_t p_index);
 	void compute_list_set_push_constant(ComputeListID p_list, const void *p_data, uint32_t p_data_size);

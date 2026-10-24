@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="RenderGpuOcclusionContext" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+		Temporary native view and compute scope for the experimental current-frame GPU occlusion prepass.
+	</brief_description>
+	<description>
+		Supplied only to the synchronous producer configured by [method RenderingServer.viewport_configure_gpu_occlusion_prepass]. Do not instantiate it from a script or retain its borrowed depth/list for later use. Context getters return unavailable defaults after callback return. CPU completion is not a GPU fence.
+		The engine owns depth and the compute list. Record only supported checked compute work against private hierarchy/scratch, registered candidate identities and candidate commands. Do not mutate scene objects, fallback data or current pose state; do not free resources, read back, submit/synchronize, begin/end lists, draw or schedule asynchronous continuations.
+		This experimental capability is limited to its documented opaque Windows x64 Vulkan Forward+ single-view configuration. The context supplies recording identity and actual view data; it does not validate conservative culling algorithms or GPU command contents.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_camera_transform" qualifiers="const">
+			<return type="Transform3D" />
+			<description>
+				Returns the current native camera transform, or identity when inactive.
+			</description>
+		</method>
+		<method name="get_compute_list" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the engine-owned compute-list token for checked compute recording, or [code]-1[/code] when inactive. Only the engine may end this list.
+			</description>
+		</method>
+		<method name="get_configuration_generation" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the current nonreused configuration generation. Echo this exact integer in the producer acknowledgment. Returns zero when inactive.
+			</description>
+		</method>
+		<method name="get_depth" qualifiers="const">
+			<return type="RID" />
+			<description>
+				Returns borrowed read-only sampled current-frame native depth for the whole internal extent. Reverse-Z clear depth is zero. The same native image resumes as the remaining depth attachment after recording. Do not free, write, retain or apply a second depth correction to it. Returns an invalid RID when inactive.
+			</description>
+		</method>
+		<method name="get_epoch" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns this viewport's actual render-recording epoch. Skipped renders do not advance it; simulation ticks and other viewports are independent. Echo this exact integer in the acknowledgment. Returns zero when inactive.
+			</description>
+		</method>
+		<method name="get_internal_size" qualifiers="const">
+			<return type="Vector2i" />
+			<description>
+				Returns the current full internal render extent, or zero when inactive. Partial render regions are unsupported.
+			</description>
+		</method>
+		<method name="get_projection" qualifiers="const">
+			<return type="Projection" />
+			<description>
+				Returns the actual corrected native projection, including Godot depth/Y correction. Do not apply those corrections again. Returns identity when inactive. Perspective projection is outside the first qualification scope.
+			</description>
+		</method>
+		<method name="get_view_index" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns zero for the supported single view, or [code]-1[/code] when inactive.
+			</description>
+		</method>
+		<method name="get_viewport" qualifiers="const">
+			<return type="RID" />
+			<description>
+				Returns the current viewport RID, or an invalid RID when inactive.
+			</description>
+		</method>
+		<method name="is_active" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns whether the synchronous producer callback may still use the context. This is a CPU lifetime check, not GPU completion.
+			</description>
+		</method>
+	</methods>
+</class>
