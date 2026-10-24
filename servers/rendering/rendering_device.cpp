@@ -5795,6 +5795,7 @@ void RenderingDevice::draw_list_bind_uniform_set(DrawListID p_list, RID p_unifor
 
 	const UniformSet *uniform_set = uniform_set_owner.get_or_null(p_uniform_set);
 	ERR_FAIL_NULL(uniform_set);
+	ERR_FAIL_COND_MSG(_draw_list_uniform_set_has_counted_alias(uniform_set), "A counted indirect bank cannot be bound as a shader resource in the same draw list.");
 
 	if (p_index > draw_list.state.set_count) {
 		draw_list.state.set_count = p_index;
@@ -5828,6 +5829,11 @@ void RenderingDevice::draw_list_bind_vertex_array(DrawListID p_list, RID p_verte
 
 	VertexArray *vertex_array = vertex_array_owner.get_or_null(p_vertex_array);
 	ERR_FAIL_NULL(vertex_array);
+	if (!draw_list.counted_indirect_trackers.is_empty()) {
+		for (RDG::ResourceTracker *tracker : vertex_array->draw_trackers) {
+			ERR_FAIL_COND_MSG(draw_list.counted_indirect_trackers.has(tracker), "A counted indirect bank cannot be bound as vertex input in the same draw list.");
+		}
+	}
 
 	if (draw_list.state.vertex_array == p_vertex_array) {
 		return; // Already set.
@@ -5876,6 +5882,13 @@ void RenderingDevice::draw_list_bind_vertex_buffers_format(DrawListID p_list, Ve
 	driver_buffers.resize_initialized(p_vertex_buffers.size());
 
 	FixedVector<RDG::ResourceTracker *, 32> draw_trackers;
+	// Check every alias before servicing a transfer or changing binding state.
+	if (!draw_list.counted_indirect_trackers.is_empty()) {
+		for (RID rid : p_vertex_buffers) {
+			const Buffer *buffer = vertex_buffer_owner.get_or_null(rid);
+			ERR_FAIL_COND_MSG(buffer != nullptr && draw_list.counted_indirect_trackers.has(buffer->draw_tracker), "A counted indirect bank cannot be bound as vertex input in the same draw list.");
+		}
+	}
 
 #if DEBUG_ENABLED
 	uint32_t max_instances_allowed = 0xFFFFFFFF;
@@ -5957,6 +5970,7 @@ void RenderingDevice::draw_list_bind_index_array(DrawListID p_list, RID p_index_
 
 	IndexArray *index_array = index_array_owner.get_or_null(p_index_array);
 	ERR_FAIL_NULL(index_array);
+	ERR_FAIL_COND_MSG(draw_list.counted_indirect_trackers.has(index_array->draw_tracker), "A counted indirect bank cannot be bound as index input in the same draw list.");
 
 	if (draw_list.state.index_array == p_index_array) {
 		return; // Already set.
@@ -6007,6 +6021,7 @@ void RenderingDevice::draw_list_draw(DrawListID p_list, bool p_use_indices, uint
 	ERR_RENDER_THREAD_GUARD();
 
 	ERR_FAIL_COND(!draw_list.active);
+	ERR_FAIL_COND_MSG(_draw_list_validate_counted_uniform_sets() != OK, "Pending shader resources conflict with counted indirect banks in this draw list.");
 
 #ifdef DEBUG_ENABLED
 	ERR_FAIL_COND_MSG(!draw_list.validation.pipeline_active,
@@ -6183,28 +6198,78 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 		return;
 	}
 
+	_draw_list_draw_indirect(p_use_indices, buffer, p_offset, p_draw_count, p_stride);
+}
+
+bool RenderingDevice::_draw_list_uniform_set_has_counted_alias(const UniformSet *p_uniform_set) const {
+	if (draw_list.counted_indirect_trackers.is_empty()) {
+		return false;
+	}
+	for (RDG::ResourceTracker *tracker : p_uniform_set->draw_trackers) {
+		if (draw_list.counted_indirect_trackers.has(tracker)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+Error RenderingDevice::_draw_list_validate_counted_uniform_sets() const {
+	if (draw_list.counted_indirect_trackers.is_empty()) {
+		return OK;
+	}
+	for (uint32_t i = 0; i < draw_list.state.set_count; i++) {
+		if (draw_list.state.sets[i].pipeline_expected_format != 0) {
+			const UniformSet *uniform_set = uniform_set_owner.get_or_null(draw_list.state.sets[i].uniform_set);
+			if (uniform_set == nullptr || _draw_list_uniform_set_has_counted_alias(uniform_set)) {
+				return ERR_INVALID_PARAMETER;
+			}
+		}
+	}
+	return OK;
+}
+
+Error RenderingDevice::draw_list_draw_indirect_count(DrawListID p_list, bool p_use_indices, RID p_buffer, int64_t p_offset, RID p_count_buffer, int64_t p_count_offset, int64_t p_max_draw_count, int64_t p_stride) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V_MSG(!draw_list.active || p_list != (int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT), ERR_INVALID_PARAMETER, "No matching active draw list.");
+	ERR_FAIL_COND_V_MSG(!driver->has_indirect_draw_count(), ERR_UNAVAILABLE, "GPU-sourced indirect draw count is unavailable on this device.");
+
+	Buffer *buffer = storage_buffer_owner.get_or_null(p_buffer);
+	Buffer *count_buffer = storage_buffer_owner.get_or_null(p_count_buffer);
+	ERR_FAIL_NULL_V(buffer, ERR_INVALID_PARAMETER);
+	ERR_FAIL_NULL_V(count_buffer, ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V_MSG(buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT) || count_buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT), ERR_INVALID_PARAMETER, "Counted indirect drawing requires ordinary nonpersistent storage buffers.");
+	ERR_FAIL_COND_V_MSG(!buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT) || !count_buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT), ERR_INVALID_PARAMETER, "Both counted indirect buffers require indirect usage.");
+	const Error range_error = RenderingDeviceIndirect::validate_count_draw_range(buffer->size, count_buffer->size, p_use_indices, p_offset, p_count_offset, p_max_draw_count, p_stride, buffer == count_buffer, driver->get_indirect_draw_count_limit());
+	ERR_FAIL_COND_V_MSG(range_error != OK, range_error, "Invalid counted indirect offsets, stride, maximum or complete buffer range.");
+	ERR_FAIL_COND_V_MSG(!draw_graph.is_draw_list_usage_compatible(buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ) || !draw_graph.is_draw_list_usage_compatible(count_buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ), ERR_INVALID_PARAMETER, "Counted indirect banks already have an incompatible use in this draw list.");
+	ERR_FAIL_COND_V_MSG(!render_pipeline_owner.owns(draw_list.state.pipeline), ERR_INVALID_PARAMETER, "Counted drawing requires a live render pipeline.");
+	ERR_FAIL_COND_V_MSG(p_use_indices && !index_array_owner.owns(draw_list.state.index_array), ERR_INVALID_PARAMETER, "Indexed counted drawing requires a live index array.");
+	return _draw_list_draw_indirect(p_use_indices, buffer, uint32_t(p_offset), uint32_t(p_max_draw_count), uint32_t(p_stride), count_buffer, uint32_t(p_count_offset));
+}
+
+Error RenderingDevice::_draw_list_draw_indirect(bool p_use_indices, Buffer *p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride, Buffer *p_count_buffer, uint32_t p_count_offset) {
 #ifdef DEBUG_ENABLED
-	ERR_FAIL_COND_MSG(!draw_list.validation.pipeline_active,
+	ERR_FAIL_COND_V_MSG(!draw_list.validation.pipeline_active, ERR_INVALID_PARAMETER,
 			"No render pipeline was set before attempting to draw.");
 	if (draw_list.validation.pipeline_vertex_format != INVALID_ID) {
 		// Pipeline uses vertices, validate format.
-		ERR_FAIL_COND_MSG(draw_list.validation.vertex_format == INVALID_ID,
+		ERR_FAIL_COND_V_MSG(draw_list.validation.vertex_format == INVALID_ID, ERR_INVALID_PARAMETER,
 				"No vertex array was bound, and render pipeline expects vertices.");
 		// Make sure format is right.
-		ERR_FAIL_COND_MSG(draw_list.validation.pipeline_vertex_format != draw_list.validation.vertex_format,
+		ERR_FAIL_COND_V_MSG(draw_list.validation.pipeline_vertex_format != draw_list.validation.vertex_format, ERR_INVALID_PARAMETER,
 				"The vertex format used to create the pipeline does not match the vertex format bound.");
 	}
 
 	if (draw_list.validation.pipeline_push_constant_size > 0) {
 		// Using push constants, check that they were supplied.
-		ERR_FAIL_COND_MSG(!draw_list.validation.pipeline_push_constant_supplied,
+		ERR_FAIL_COND_V_MSG(!draw_list.validation.pipeline_push_constant_supplied, ERR_INVALID_PARAMETER,
 				"The shader in this pipeline requires a push constant to be set before drawing, but it's not present.");
 	}
 
 	if (p_use_indices) {
-		ERR_FAIL_COND_MSG(!draw_list.validation.index_array_count,
+		ERR_FAIL_COND_V_MSG(!draw_list.validation.index_array_count, ERR_INVALID_PARAMETER,
 				"Draw command requested indices, but no index buffer was set.");
-		ERR_FAIL_COND_MSG(draw_list.validation.pipeline_uses_restart_indices != draw_list.validation.index_buffer_uses_restart_indices,
+		ERR_FAIL_COND_V_MSG(draw_list.validation.pipeline_uses_restart_indices != draw_list.validation.index_buffer_uses_restart_indices, ERR_INVALID_PARAMETER,
 				"The usage of restart indices in index buffer does not match the render primitive in the pipeline.");
 	}
 #endif
@@ -6218,13 +6283,13 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 
 		if (draw_list.state.sets[i].pipeline_expected_format != draw_list.state.sets[i].uniform_set_format) {
 			if (draw_list.state.sets[i].uniform_set_format == 0) {
-				ERR_FAIL_MSG(vformat("Uniforms were never supplied for set (%d) at the time of drawing, which are required by the pipeline.", i));
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, vformat("Uniforms were never supplied for set (%d) at the time of drawing, which are required by the pipeline.", i));
 			} else if (uniform_set_owner.owns(draw_list.state.sets[i].uniform_set)) {
 				UniformSet *us = uniform_set_owner.get_or_null(draw_list.state.sets[i].uniform_set);
 				const String us_info = us ? vformat("(%d):\n%s\n", i, _shader_uniform_debug(us->shader_id, us->shader_set)) : vformat("(%d, which was just freed) ", i);
-				ERR_FAIL_MSG(vformat("Uniforms supplied for set %sare not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n%s", us_info, _shader_uniform_debug(draw_list.state.pipeline_shader)));
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, vformat("Uniforms supplied for set %sare not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n%s", us_info, _shader_uniform_debug(draw_list.state.pipeline_shader)));
 			} else {
-				ERR_FAIL_MSG(vformat("Uniforms supplied for set (%d, which was just freed) are not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n%s", i, _shader_uniform_debug(draw_list.state.pipeline_shader)));
+				ERR_FAIL_V_MSG(ERR_INVALID_PARAMETER, vformat("Uniforms supplied for set (%d, which was just freed) are not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n%s", i, _shader_uniform_debug(draw_list.state.pipeline_shader)));
 			}
 		}
 	}
@@ -6233,10 +6298,22 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 	// Resolve every descriptor resource before recording or changing binding state.
 	UniformSet *uniform_sets[MAX_UNIFORM_SETS] = {};
 	for (uint32_t i = 0; i < draw_list.state.set_count; i++) {
-		if (draw_list.state.sets[i].pipeline_expected_format != 0 && !draw_list.state.sets[i].bound) {
+		if (draw_list.state.sets[i].pipeline_expected_format != 0 && (!draw_list.state.sets[i].bound || p_count_buffer != nullptr || !draw_list.counted_indirect_trackers.is_empty())) {
 			uniform_sets[i] = uniform_set_owner.get_or_null(draw_list.state.sets[i].uniform_set);
-			ERR_FAIL_NULL(uniform_sets[i]);
+			ERR_FAIL_NULL_V(uniform_sets[i], ERR_INVALID_PARAMETER);
+			ERR_FAIL_COND_V_MSG(_draw_list_uniform_set_has_counted_alias(uniform_sets[i]), ERR_INVALID_PARAMETER, "A counted indirect bank cannot be a shader resource in the same draw list.");
+			if (p_count_buffer != nullptr) {
+				for (RDG::ResourceTracker *tracker : uniform_sets[i]->draw_trackers) {
+					ERR_FAIL_COND_V_MSG(tracker == p_buffer->draw_tracker || tracker == p_count_buffer->draw_tracker, ERR_INVALID_PARAMETER, "Counted indirect commands and counters cannot alias pending shader resources.");
+				}
+			}
 		}
+	}
+
+	// All fallible checks precede reservations, descriptor changes and graph recording.
+	if (p_count_buffer != nullptr) {
+		draw_list.counted_indirect_trackers.insert(p_buffer->draw_tracker);
+		draw_list.counted_indirect_trackers.insert(p_count_buffer->draw_tracker);
 	}
 
 	// Prepare descriptor sets if the API doesn't use pipeline barriers.
@@ -6270,19 +6347,26 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 		}
 	}
 
-	if (p_use_indices) {
-		draw_graph.add_draw_list_draw_indexed_indirect(buffer->driver_id, p_offset, p_draw_count, p_stride);
+	if (p_count_buffer != nullptr) {
+		draw_graph.add_draw_list_draw_indirect_count(p_use_indices, p_buffer->driver_id, p_offset, p_count_buffer->driver_id, p_count_offset, p_draw_count, p_stride);
+	} else if (p_use_indices) {
+		draw_graph.add_draw_list_draw_indexed_indirect(p_buffer->driver_id, p_offset, p_draw_count, p_stride);
 	} else {
-		draw_graph.add_draw_list_draw_indirect(buffer->driver_id, p_offset, p_draw_count, p_stride);
+		draw_graph.add_draw_list_draw_indirect(p_buffer->driver_id, p_offset, p_draw_count, p_stride);
 	}
 
 	draw_list.state.draw_count++;
 
-	if (buffer->draw_tracker != nullptr) {
-		draw_graph.add_draw_list_usage(buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ);
+	if (p_buffer->draw_tracker != nullptr) {
+		draw_graph.add_draw_list_usage(p_buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ);
 	}
 
-	_check_transfer_worker_buffer(buffer);
+	_check_transfer_worker_buffer(p_buffer);
+	if (p_count_buffer != nullptr && p_count_buffer != p_buffer) {
+		draw_graph.add_draw_list_usage(p_count_buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ);
+		_check_transfer_worker_buffer(p_count_buffer);
+	}
+	return OK;
 }
 
 void RenderingDevice::draw_list_set_viewport(DrawListID p_list, const Rect2 &p_rect) {
@@ -6335,12 +6419,15 @@ RenderingDevice::DrawListID RenderingDevice::draw_list_switch_to_next_pass() {
 
 	draw_list_current_subpass++;
 
+	// The graph records every subpass in the same resource-usage list.
+	HashSet<RDG::ResourceTracker *> counted_indirect_trackers = std::move(draw_list.counted_indirect_trackers);
 	Rect2i viewport;
 	_draw_list_end(&viewport);
 
 	draw_graph.add_draw_list_next_subpass(RDD::COMMAND_BUFFER_TYPE_PRIMARY);
 
 	_draw_list_start(viewport);
+	draw_list.counted_indirect_trackers = std::move(counted_indirect_trackers);
 
 	return int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT;
 }
@@ -8875,6 +8962,9 @@ String RenderingDevice::get_captured_timestamp_name(uint32_t p_index) const {
 }
 
 uint64_t RenderingDevice::limit_get(Limit p_limit) const {
+	if (p_limit == LIMIT_MAX_DRAW_INDIRECT_COUNT) {
+		return driver->get_indirect_draw_count_limit();
+	}
 	return driver->limit_get(p_limit);
 }
 
@@ -9055,6 +9145,8 @@ RenderingDevice *RenderingDevice::create_local_device() {
 bool RenderingDevice::has_feature(const Features p_feature) const {
 	// Some features can be deduced from the capabilities without querying the driver and looking at the capabilities.
 	switch (p_feature) {
+		case SUPPORTS_DRAW_INDIRECT_COUNT:
+			return driver->has_indirect_draw_count();
 		case SUPPORTS_MULTIVIEW: {
 			const RDD::MultiviewCapabilities &multiview_capabilities = driver->get_multiview_capabilities();
 			return multiview_capabilities.is_supported && multiview_capabilities.max_view_count > 1;
@@ -9180,6 +9272,7 @@ void RenderingDevice::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("draw_list_draw", "draw_list", "use_indices", "instances", "procedural_vertex_count"), &RenderingDevice::draw_list_draw, DEFVAL(0));
 	ClassDB::bind_method(D_METHOD("draw_list_draw_indirect", "draw_list", "use_indices", "buffer", "offset", "draw_count", "stride"), &RenderingDevice::draw_list_draw_indirect, DEFVAL(0), DEFVAL(1), DEFVAL(0));
+	ClassDB::bind_method(D_METHOD("draw_list_draw_indirect_count", "draw_list", "use_indices", "buffer", "offset", "count_buffer", "count_offset", "max_draw_count", "stride"), &RenderingDevice::draw_list_draw_indirect_count);
 
 	ClassDB::bind_method(D_METHOD("draw_list_enable_scissor", "draw_list", "rect"), &RenderingDevice::draw_list_enable_scissor, DEFVAL(Rect2()));
 	ClassDB::bind_method(D_METHOD("draw_list_disable_scissor", "draw_list"), &RenderingDevice::draw_list_disable_scissor);
@@ -9790,6 +9883,7 @@ void RenderingDevice::_bind_methods() {
 	BIND_ENUM_CONSTANT(SUPPORTS_RAY_QUERY);
 	BIND_ENUM_CONSTANT(SUPPORTS_RAYTRACING_PIPELINE);
 	BIND_ENUM_CONSTANT(SUPPORTS_HDR_OUTPUT);
+	BIND_ENUM_CONSTANT(SUPPORTS_DRAW_INDIRECT_COUNT);
 
 	BIND_ENUM_CONSTANT(LIMIT_MAX_BOUND_UNIFORM_SETS);
 	BIND_ENUM_CONSTANT(LIMIT_MAX_FRAMEBUFFER_COLOR_ATTACHMENTS);
@@ -9830,6 +9924,7 @@ void RenderingDevice::_bind_methods() {
 	BIND_ENUM_CONSTANT(LIMIT_MAX_VIEWPORT_DIMENSIONS_Y);
 	BIND_ENUM_CONSTANT(LIMIT_METALFX_TEMPORAL_SCALER_MIN_SCALE);
 	BIND_ENUM_CONSTANT(LIMIT_METALFX_TEMPORAL_SCALER_MAX_SCALE);
+	BIND_ENUM_CONSTANT(LIMIT_MAX_DRAW_INDIRECT_COUNT);
 
 	BIND_ENUM_CONSTANT(MEMORY_TEXTURES);
 	BIND_ENUM_CONSTANT(MEMORY_BUFFERS);

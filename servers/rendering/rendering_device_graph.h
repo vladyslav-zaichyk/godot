@@ -94,7 +94,9 @@ public:
 			TYPE_SET_PUSH_CONSTANT,
 			TYPE_SET_SCISSOR,
 			TYPE_SET_VIEWPORT,
-			TYPE_UNIFORM_SET_PREPARE_FOR_USE
+			TYPE_UNIFORM_SET_PREPARE_FOR_USE,
+			TYPE_DRAW_INDIRECT_COUNT,
+			TYPE_DRAW_INDEXED_INDIRECT_COUNT,
 		};
 
 		Type type = TYPE_NONE;
@@ -632,6 +634,15 @@ private:
 		uint32_t stride = 0;
 	};
 
+	struct DrawListDrawIndirectCountInstruction : DrawListInstruction {
+		RDD::BufferID buffer;
+		uint32_t offset;
+		RDD::BufferID count_buffer;
+		uint32_t count_offset;
+		uint32_t max_draw_count;
+		uint32_t stride;
+	};
+
 	struct DrawListEndRenderPassInstruction : DrawListInstruction {
 		// No contents.
 	};
@@ -928,6 +939,7 @@ public:
 	void add_draw_list_draw(uint32_t p_vertex_count, uint32_t p_instance_count);
 	void add_draw_list_draw_indexed(uint32_t p_index_count, uint32_t p_instance_count, uint32_t p_first_index);
 	void add_draw_list_draw_indirect(RDD::BufferID p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride);
+	void add_draw_list_draw_indirect_count(bool p_use_indices, RDD::BufferID p_buffer, uint32_t p_offset, RDD::BufferID p_count_buffer, uint32_t p_count_offset, uint32_t p_max_draw_count, uint32_t p_stride);
 	void add_draw_list_draw_indexed_indirect(RDD::BufferID p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride);
 	void add_draw_list_execute_commands(RDD::CommandBufferID p_command_buffer);
 	void add_draw_list_next_subpass(RDD::CommandBufferType p_command_buffer_type);
@@ -938,6 +950,7 @@ public:
 	void add_draw_list_set_viewport(Rect2i p_rect);
 	void add_draw_list_uniform_set_prepare_for_use(RDD::ShaderID p_shader, RDD::UniformSetID p_uniform_set, uint32_t set_index);
 	void add_draw_list_usage(ResourceTracker *p_tracker, ResourceUsage p_usage);
+	bool is_draw_list_usage_compatible(const ResourceTracker *p_tracker, ResourceUsage p_usage) const;
 	void add_draw_list_usages(VectorView<ResourceTracker *> p_trackers, VectorView<ResourceUsage> p_usages);
 	void add_draw_list_end();
 	void add_texture_clear_color(RDD::TextureID p_dst, ResourceTracker *p_dst_tracker, const Color &p_color, const RDD::TextureSubresourceRange &p_range);

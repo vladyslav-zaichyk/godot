@@ -393,6 +393,22 @@
 				For multiple Vulkan draws, [param stride] must be a multiple of 4 and at least the command size; the count must fit the enabled device multidraw feature and limit. Backend range validation follows the driver's actual layout: D3D12 uses packed native commands and Metal advances by the supplied stride. The public numeric arguments retain their unsigned 32-bit native binding; these checks validate values received after binding conversion.
 			</description>
 		</method>
+		<method name="draw_list_draw_indirect_count">
+			<return type="int" enum="Error" />
+			<param index="0" name="draw_list" type="int" />
+			<param index="1" name="use_indices" type="bool" />
+			<param index="2" name="buffer" type="RID" />
+			<param index="3" name="offset" type="int" />
+			<param index="4" name="count_buffer" type="RID" />
+			<param index="5" name="count_offset" type="int" />
+			<param index="6" name="max_draw_count" type="int" />
+			<param index="7" name="stride" type="int" />
+			<description>
+				Experimental Vulkan operation. Draws a dense prefix of indirect commands using a GPU-written unsigned 32-bit count at [param count_offset] in [param count_buffer]. Executes the lesser of that count and [param max_draw_count]. Query [constant SUPPORTS_DRAW_INDIRECT_COUNT] first; unavailable devices return [constant @GlobalScope.ERR_UNAVAILABLE] without recording a draw. No CPU count readback or implicit fallback is performed.
+				Both RIDs must be live nonpersistent storage buffers from this device created with [constant STORAGE_BUFFER_USAGE_DISPATCH_INDIRECT]. Dynamic persistent buffers are rejected because per-frame region offsets are outside this API. All numeric inputs retain signed 64-bit values until validation and must fit unsigned 32-bit values. Offsets align to 4 bytes. The positive maximum must fit [constant LIMIT_MAX_DRAW_INDIRECT_COUNT]. Stride aligns to 4 bytes and is at least 20 bytes when indexed or 16 bytes otherwise, including maximum 1. The complete maximum command span and four-byte count must fit, even when the GPU count is zero. Shared-buffer ranges must not overlap.
+				The GPU producer must keep raw counts within the device limit and all consumed geometry and instance ranges valid. CPU validation does not inspect GPU contents. Counted banks cannot also be shader resources, vertex input or index input in the same draw list, including later subpasses and either call order. Rejected calls preserve recording state. Caller owns both buffers and must retire dependent work before freeing or reusing storage. Returns [constant @GlobalScope.OK] when recorded or an error for invalid metadata or state.
+			</description>
+		</method>
 		<method name="draw_list_enable_scissor">
 			<return type="void" />
 			<param index="0" name="draw_list" type="int" />
@@ -2349,6 +2365,9 @@
 		<constant name="INDEX_BUFFER_FORMAT_UINT32" value="1" enum="IndexBufferFormat">
 			Index buffer in 32-bit unsigned integer format. This limits the maximum index that can be specified to [code]4294967295[/code].
 		</constant>
+		<constant name="LIMIT_MAX_DRAW_INDIRECT_COUNT" value="49" enum="Limit">
+			Maximum raw GPU count and configured maximum for counted indirect drawing, or zero when unsupported. This count-specific limit is independent of ordinary multidraw support.
+		</constant>
 		<constant name="STORAGE_BUFFER_USAGE_DISPATCH_INDIRECT" value="1" enum="StorageBufferUsage" is_bitfield="true">
 		</constant>
 		<constant name="BUFFER_CREATION_DEVICE_ADDRESS_BIT" value="1" enum="BufferCreationBits" is_bitfield="true">
@@ -2848,6 +2867,9 @@
 		</constant>
 		<constant name="SUPPORTS_HDR_OUTPUT" value="13" enum="Features">
 			Support for high dynamic range (HDR) output.
+		</constant>
+		<constant name="SUPPORTS_DRAW_INDIRECT_COUNT" value="14" enum="Features">
+			Support for GPU-sourced indirect draw count. Currently enabled only for Vulkan devices exposing the optional KHR extension and both entrypoints. Independent of ordinary multidraw and first-instance support.
 		</constant>
 		<constant name="LIMIT_MAX_BOUND_UNIFORM_SETS" value="0" enum="Limit">
 			Maximum number of uniform sets that can be bound at a given time.

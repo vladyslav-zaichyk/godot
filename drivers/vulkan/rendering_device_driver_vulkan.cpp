@@ -564,6 +564,7 @@ Error RenderingDeviceDriverVulkan::_initialize_device_extensions() {
 
 	_register_requested_device_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME, true);
 	_register_requested_device_extension(VK_KHR_MULTIVIEW_EXTENSION_NAME, false);
+	_register_requested_device_extension(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME, false);
 	_register_requested_device_extension(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, false);
 	_register_requested_device_extension(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME, false);
 	_register_requested_device_extension(VK_EXT_FRAGMENT_DENSITY_MAP_2_EXTENSION_NAME, false);
@@ -1330,6 +1331,10 @@ Error RenderingDeviceDriverVulkan::_add_queue_create_info(LocalVector<VkDeviceQu
 }
 
 Error RenderingDeviceDriverVulkan::_initialize_device(const LocalVector<VkDeviceQueueCreateInfo> &p_queue_create_info) {
+	indirect_draw_count_supported = false;
+	device_functions.CmdDrawIndirectCountKHR = nullptr;
+	device_functions.CmdDrawIndexedIndirectCountKHR = nullptr;
+
 	TightLocalVector<const char *> enabled_extension_names;
 	enabled_extension_names.reserve(enabled_device_extension_names.size());
 	for (const CharString &extension_name : enabled_device_extension_names) {
@@ -1513,6 +1518,14 @@ Error RenderingDeviceDriverVulkan::_initialize_device(const LocalVector<VkDevice
 		device_functions.GetSwapchainImagesKHR = PFN_vkGetSwapchainImagesKHR(functions.GetDeviceProcAddr(vk_device, "vkGetSwapchainImagesKHR"));
 		device_functions.AcquireNextImageKHR = PFN_vkAcquireNextImageKHR(functions.GetDeviceProcAddr(vk_device, "vkAcquireNextImageKHR"));
 		device_functions.QueuePresentKHR = PFN_vkQueuePresentKHR(functions.GetDeviceProcAddr(vk_device, "vkQueuePresentKHR"));
+
+		if (enabled_device_extension_names.has(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME)) {
+			// Enabling this extension also enables its drawIndirectCount feature alias.
+			// A Vulkan 1.2 device without the extension needs separate core feature plumbing.
+			device_functions.CmdDrawIndirectCountKHR = PFN_vkCmdDrawIndirectCountKHR(functions.GetDeviceProcAddr(vk_device, "vkCmdDrawIndirectCountKHR"));
+			device_functions.CmdDrawIndexedIndirectCountKHR = PFN_vkCmdDrawIndexedIndirectCountKHR(functions.GetDeviceProcAddr(vk_device, "vkCmdDrawIndexedIndirectCountKHR"));
+			indirect_draw_count_supported = device_functions.CmdDrawIndirectCountKHR != nullptr && device_functions.CmdDrawIndexedIndirectCountKHR != nullptr;
+		}
 
 		if (enabled_device_extension_names.has(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME)) {
 			device_functions.CreateRenderPass2KHR = PFN_vkCreateRenderPass2KHR(functions.GetDeviceProcAddr(vk_device, "vkCreateRenderPass2KHR"));
@@ -5747,10 +5760,12 @@ void RenderingDeviceDriverVulkan::command_render_draw_indexed_indirect(CommandBu
 }
 
 void RenderingDeviceDriverVulkan::command_render_draw_indexed_indirect_count(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, BufferID p_count_buffer, uint64_t p_count_buffer_offset, uint32_t p_max_draw_count, uint32_t p_stride) {
+	ERR_FAIL_COND_MSG(!indirect_draw_count_supported, "GPU-sourced indirect draw count is unavailable on this Vulkan device.");
+
 	const CommandBufferInfo *command_buffer = (const CommandBufferInfo *)p_cmd_buffer.id;
 	const BufferInfo *indirect_buf_info = (const BufferInfo *)p_indirect_buffer.id;
 	const BufferInfo *count_buf_info = (const BufferInfo *)p_count_buffer.id;
-	vkCmdDrawIndexedIndirectCount(command_buffer->vk_command_buffer, indirect_buf_info->vk_buffer, p_offset, count_buf_info->vk_buffer, p_count_buffer_offset, p_max_draw_count, p_stride);
+	device_functions.CmdDrawIndexedIndirectCountKHR(command_buffer->vk_command_buffer, indirect_buf_info->vk_buffer, p_offset, count_buf_info->vk_buffer, p_count_buffer_offset, p_max_draw_count, p_stride);
 }
 
 void RenderingDeviceDriverVulkan::command_render_draw_indirect(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, uint32_t p_draw_count, uint32_t p_stride) {
@@ -5760,10 +5775,12 @@ void RenderingDeviceDriverVulkan::command_render_draw_indirect(CommandBufferID p
 }
 
 void RenderingDeviceDriverVulkan::command_render_draw_indirect_count(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, BufferID p_count_buffer, uint64_t p_count_buffer_offset, uint32_t p_max_draw_count, uint32_t p_stride) {
+	ERR_FAIL_COND_MSG(!indirect_draw_count_supported, "GPU-sourced indirect draw count is unavailable on this Vulkan device.");
+
 	const CommandBufferInfo *command_buffer = (const CommandBufferInfo *)p_cmd_buffer.id;
 	const BufferInfo *indirect_buf_info = (const BufferInfo *)p_indirect_buffer.id;
 	const BufferInfo *count_buf_info = (const BufferInfo *)p_count_buffer.id;
-	vkCmdDrawIndirectCount(command_buffer->vk_command_buffer, indirect_buf_info->vk_buffer, p_offset, count_buf_info->vk_buffer, p_count_buffer_offset, p_max_draw_count, p_stride);
+	device_functions.CmdDrawIndirectCountKHR(command_buffer->vk_command_buffer, indirect_buf_info->vk_buffer, p_offset, count_buf_info->vk_buffer, p_count_buffer_offset, p_max_draw_count, p_stride);
 }
 
 void RenderingDeviceDriverVulkan::command_render_bind_vertex_buffers(CommandBufferID p_cmd_buffer, uint32_t p_binding_count, const BufferID *p_buffers, const uint64_t *p_offsets, uint64_t p_dynamic_offsets) {

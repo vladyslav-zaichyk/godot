@@ -75,4 +75,33 @@ inline Error validate_draw_range(uint64_t p_buffer_size, bool p_use_indices, uin
 	return end <= p_buffer_size ? OK : ERR_INVALID_PARAMETER;
 }
 
+// The new count-draw binding retains signed source values until this check.
+// A GPU counter is never read here; the complete CPU-known maximum must fit.
+inline Error validate_count_draw_range(uint64_t p_command_buffer_size, uint64_t p_counter_buffer_size, bool p_use_indices, int64_t p_offset, int64_t p_count_offset, int64_t p_maximum_count, int64_t p_stride, bool p_same_buffer, uint32_t p_device_limit) {
+	if (p_offset < 0 || p_count_offset < 0 || p_maximum_count <= 0 || p_stride < 0 ||
+			uint64_t(p_offset) > UINT32_MAX || uint64_t(p_count_offset) > UINT32_MAX ||
+			uint64_t(p_maximum_count) > UINT32_MAX || uint64_t(p_stride) > UINT32_MAX) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const uint64_t command_size = p_use_indices ? 20 : 16;
+	if ((p_offset % 4) != 0 || (p_count_offset % 4) != 0 || (p_stride % 4) != 0 || uint64_t(p_stride) < command_size) {
+		return ERR_INVALID_PARAMETER;
+	}
+	// All operands fit uint32_t before promotion; this complete sum fits uint64_t.
+	const uint64_t command_end = uint64_t(p_offset) + uint64_t(p_maximum_count - 1) * uint64_t(p_stride) + command_size;
+	const uint64_t counter_end = uint64_t(p_count_offset) + 4;
+	if (command_end > p_command_buffer_size || counter_end > p_counter_buffer_size) {
+		return ERR_INVALID_PARAMETER;
+	}
+	// Deliberately reject a counter in any part of the declared span, including
+	// stride padding. A prefix or a disjoint suffix in the same buffer is legal.
+	if (p_same_buffer && uint64_t(p_count_offset) < command_end && uint64_t(p_offset) < counter_end) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (p_device_limit == 0 || uint64_t(p_maximum_count) > p_device_limit) {
+		return ERR_UNAVAILABLE;
+	}
+	return OK;
+}
+
 } // namespace RenderingDeviceIndirect

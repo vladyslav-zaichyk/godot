@@ -33,6 +33,7 @@
 #include "core/object/worker_thread_pool.h"
 #include "core/os/condition_variable.h"
 #include "core/os/thread_safe.h"
+#include "core/templates/hash_set.h"
 #include "core/templates/local_vector.h"
 #include "core/templates/rb_map.h"
 #include "core/templates/rb_set.h"
@@ -1440,6 +1441,8 @@ private:
 	struct DrawList {
 		Rect2i viewport;
 		bool active = false;
+		// V1 rejects mixed use of counted banks in this render pass in both call orders.
+		HashSet<RDG::ResourceTracker *> counted_indirect_trackers;
 
 		struct SetState {
 			uint32_t pipeline_expected_format = 0;
@@ -1505,6 +1508,9 @@ private:
 
 	void _draw_list_start(const Rect2i &p_viewport);
 	void _draw_list_end(Rect2i *r_last_viewport = nullptr);
+	bool _draw_list_uniform_set_has_counted_alias(const UniformSet *p_uniform_set) const;
+	Error _draw_list_validate_counted_uniform_sets() const;
+	Error _draw_list_draw_indirect(bool p_use_indices, Buffer *p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride, Buffer *p_count_buffer = nullptr, uint32_t p_count_offset = 0);
 
 public:
 	enum DrawFlags {
@@ -1558,6 +1564,7 @@ public:
 
 	void draw_list_draw(DrawListID p_list, bool p_use_indices, uint32_t p_instances = 1, uint32_t p_procedural_vertices = 0);
 	void draw_list_draw_indirect(DrawListID p_list, bool p_use_indices, RID p_buffer, uint32_t p_offset = 0, uint32_t p_draw_count = 1, uint32_t p_stride = 0);
+	Error draw_list_draw_indirect_count(DrawListID p_list, bool p_use_indices, RID p_buffer, int64_t p_offset, RID p_count_buffer, int64_t p_count_offset, int64_t p_max_draw_count, int64_t p_stride);
 
 	void draw_list_set_viewport(DrawListID p_list, const Rect2 &p_rect);
 	void draw_list_enable_scissor(DrawListID p_list, const Rect2 &p_rect);
