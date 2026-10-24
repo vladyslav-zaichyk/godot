@@ -1,0 +1,34 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0,std430) buffer Ids { uint ids[]; };
+layout(set=0,binding=1,std430) buffer Commands0 { uint commands0[]; };
+layout(set=0,binding=2,std430) buffer Counter0 { uint counter0[]; };
+layout(set=0,binding=3,std430) buffer Commands1 { uint commands1[]; };
+layout(set=0,binding=4,std430) buffer Counter1 { uint counter1[]; };
+layout(set=0,binding=5,std430) buffer Commands2 { uint commands2[]; };
+layout(set=0,binding=6,std430) buffer Counter2 { uint counter2[]; };
+layout(push_constant,std430) uniform Parameters { uint stage; uint count; uint unused0; uint unused1; } pc;
+
+void main() {
+    uint owner = gl_GlobalInvocationID.x;
+    if (owner >= 3u) return;
+    if (pc.stage == 0u || pc.stage == 2u) {
+        uint count = pc.stage == 0u ? 0u : pc.count;
+        if (owner == 0u) counter0[1] = count;
+        if (owner == 1u) counter1[1] = count;
+        if (owner == 2u) counter2[1] = count;
+        return;
+    }
+    for (uint slot=0u; slot<16u; ++slot) ids[owner*16u+slot] = 0xffffffffu;
+    for (uint record=0u; record<4u; ++record) {
+        uint first = owner * 16u + 1u + record * 3u;
+        ids[first] = owner * 4u + record;
+        uint word = 4u + record * 8u;
+        uint command[5] = uint[5](6u,1u,0u,0u,first);
+        for (uint field=0u;field<5u;++field) {
+            if (owner == 0u) commands0[word+field] = command[field];
+            if (owner == 1u) commands1[word+field] = command[field];
+            if (owner == 2u) commands2[word+field] = command[field];
+        }
+    }
+}

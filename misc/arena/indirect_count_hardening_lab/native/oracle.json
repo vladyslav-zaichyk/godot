@@ -1,0 +1,8045 @@
+{
+  "contract": "e10-hardening-native-oracle-v1",
+  "assembly": "NativeHardeningLab",
+  "inputs": [
+    "NativeHardeningLab.csproj",
+    "project.godot",
+    "Main.tscn",
+    "NativeHardeningContract.cs",
+    "NativeLogger.cs",
+    "Consumer.gdshader",
+    "Producer.glslinc",
+    "oracle.json"
+  ],
+  "cases": {
+    "native_self_command_alias_recovery": {
+      "operations": [
+        "setup",
+        "prewarm_k",
+        "raster:prewarm",
+        "alias_own_bank",
+        "raster:alias_skip_recovery",
+        "raster:alias_skip_repeat",
+        "cleanup"
+      ],
+      "rasters": [
+        {
+          "probe": "prewarm",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_recovery",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_repeat",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "warning",
+          "message": "Forward+ skipped a draw after checked binding or counted submission failed (Error 31).",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_bytes_final": 0
+      },
+      "min_checks": 150
+    },
+    "native_checked_command_bind_recovery": {
+      "operations": [
+        "setup",
+        "prewarm_k",
+        "raster:prewarm",
+        "alias_leading_reserved_bank",
+        "raster:alias_skip_recovery",
+        "raster:alias_skip_repeat",
+        "cleanup"
+      ],
+      "rasters": [
+        {
+          "probe": "prewarm",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_recovery",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_repeat",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "warning",
+          "message": "Forward+ skipped a draw after checked binding or counted submission failed (Error 31).",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_bytes_final": 0
+      },
+      "min_checks": 150
+    },
+    "native_self_counter_alias_recovery": {
+      "operations": [
+        "setup",
+        "prewarm_k",
+        "raster:prewarm",
+        "alias_own_bank",
+        "raster:alias_skip_recovery",
+        "raster:alias_skip_repeat",
+        "cleanup"
+      ],
+      "rasters": [
+        {
+          "probe": "prewarm",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_recovery",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_repeat",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "warning",
+          "message": "Forward+ skipped a draw after checked binding or counted submission failed (Error 31).",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_bytes_final": 0
+      },
+      "min_checks": 150
+    },
+    "native_checked_counter_bind_recovery": {
+      "operations": [
+        "setup",
+        "prewarm_k",
+        "raster:prewarm",
+        "alias_leading_reserved_bank",
+        "raster:alias_skip_recovery",
+        "raster:alias_skip_repeat",
+        "cleanup"
+      ],
+      "rasters": [
+        {
+          "probe": "prewarm",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_recovery",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_repeat",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "warning",
+          "message": "Forward+ skipped a draw after checked binding or counted submission failed (Error 31).",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_bytes_final": 0
+      },
+      "min_checks": 150
+    },
+    "native_material_replacement": {
+      "operations": [
+        "setup",
+        "prewarm_k",
+        "raster:prewarm",
+        "alias_own_bank",
+        "raster:alias_skip_recovery",
+        "hide_other_owners",
+        "replace_owner_material",
+        "raster:material_recovered",
+        "cleanup"
+      ],
+      "rasters": [
+        {
+          "probe": "prewarm",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "alias_skip_recovery",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "material_recovered",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "warning",
+          "message": "Forward+ skipped a draw after checked binding or counted submission failed (Error 31).",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_bytes_final": 0
+      },
+      "min_checks": 150
+    },
+    "native_count_k_zero_one": {
+      "operations": [
+        "setup",
+        "prewarm_k",
+        "raster:prewarm",
+        "count_k_first",
+        "raster:count_k_first",
+        "count_zero_first",
+        "raster:count_zero_first",
+        "count_one_first",
+        "raster:count_one_first",
+        "count_k_repeat",
+        "raster:count_k_repeat",
+        "count_zero_repeat",
+        "raster:count_zero_repeat",
+        "count_one_repeat",
+        "raster:count_one_repeat",
+        "cleanup"
+      ],
+      "rasters": [
+        {
+          "probe": "prewarm",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "count_k_first",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "count_zero_first",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "count_one_first",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "count_k_repeat",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "count_zero_repeat",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "count_one_repeat",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_bytes_final": 0
+      },
+      "min_checks": 350
+    },
+    "native_borrower_lifecycle": {
+      "operations": [
+        "setup",
+        "prewarm_k",
+        "raster:prewarm",
+        "hide_third_owner",
+        "raster:survivors",
+        "borrower_attach_visible",
+        "raster:borrower_visible",
+        "borrower_detach",
+        "raster:borrower_detached",
+        "borrower_reattach",
+        "raster:borrower_reattached",
+        "borrower_destroy",
+        "raster:survivor_after_destroy",
+        "cleanup"
+      ],
+      "rasters": [
+        {
+          "probe": "prewarm",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "survivors",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "borrower_visible",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "borrower_detached",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "borrower_reattached",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "survivor_after_destroy",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_bytes_final": 0,
+        "borrower_cycles": 1
+      },
+      "min_checks": 350
+    },
+    "native_buffer_plateau": {
+      "operations": [
+        "setup",
+        "prewarm_k",
+        "raster:prewarm",
+        "hide_third_owner",
+        "raster:survivors",
+        "retire_cycle_00",
+        "raster:cycle_00",
+        "retire_cycle_01",
+        "raster:cycle_01",
+        "retire_cycle_02",
+        "raster:cycle_02",
+        "retire_cycle_03",
+        "raster:cycle_03",
+        "retire_cycle_04",
+        "raster:cycle_04",
+        "retire_cycle_05",
+        "raster:cycle_05",
+        "retire_cycle_06",
+        "raster:cycle_06",
+        "retire_cycle_07",
+        "raster:cycle_07",
+        "retire_cycle_08",
+        "raster:cycle_08",
+        "retire_cycle_09",
+        "raster:cycle_09",
+        "retire_cycle_10",
+        "raster:cycle_10",
+        "retire_cycle_11",
+        "raster:cycle_11",
+        "retire_cycle_12",
+        "raster:cycle_12",
+        "retire_cycle_13",
+        "raster:cycle_13",
+        "retire_cycle_14",
+        "raster:cycle_14",
+        "retire_cycle_15",
+        "raster:cycle_15",
+        "retire_cycle_16",
+        "raster:cycle_16",
+        "retire_cycle_17",
+        "raster:cycle_17",
+        "retire_cycle_18",
+        "raster:cycle_18",
+        "retire_cycle_19",
+        "raster:cycle_19",
+        "retire_cycle_20",
+        "raster:cycle_20",
+        "retire_cycle_21",
+        "raster:cycle_21",
+        "retire_cycle_22",
+        "raster:cycle_22",
+        "retire_cycle_23",
+        "raster:cycle_23",
+        "retire_cycle_24",
+        "raster:cycle_24",
+        "retire_cycle_25",
+        "raster:cycle_25",
+        "retire_cycle_26",
+        "raster:cycle_26",
+        "retire_cycle_27",
+        "raster:cycle_27",
+        "retire_cycle_28",
+        "raster:cycle_28",
+        "retire_cycle_29",
+        "raster:cycle_29",
+        "retire_cycle_30",
+        "raster:cycle_30",
+        "retire_cycle_31",
+        "raster:cycle_31",
+        "cleanup"
+      ],
+      "rasters": [
+        {
+          "probe": "prewarm",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "survivors",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_00",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_01",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_02",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_03",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_04",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_05",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_06",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_07",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_08",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_09",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_10",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_11",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_12",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_13",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_14",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_15",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_16",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_17",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_18",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_19",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_20",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_21",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_22",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_23",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_24",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_25",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_26",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_27",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_28",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_29",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_30",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "cycle_31",
+          "samples": [
+            {
+              "x": 8,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 40,
+              "expected_rgba": [
+                255,
+                255,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 40,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 24,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 24,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 40,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 56,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_bytes_final": 0,
+        "borrower_cycles": 32
+      },
+      "plateau": {
+        "warmup_cycles": 8,
+        "minimum_samples": 24,
+        "allowed_growth_bytes": 0
+      },
+      "min_checks": 2000
+    }
+  },
+  "not_qualified": [
+    "No Godot/GPU/native build was run while authoring this stand; compile-only delivery does not qualify runtime behavior.",
+    "No FPS, frame-time or physical VRAM result; texture/storage readbacks serialize these correctness probes.",
+    "Opaque ordering and matching pipeline keys are derived from pinned native source, material priority and mesh local indices; no native pipeline RID or GPU order instrumentation.",
+    "Logical plateau uses RD GetMemoryUsage(Buffers): eight warmup cycles and twenty-four measured cycles, exact zero growth allowance. It is not physical VRAM or a sustained production guarantee.",
+    "Frame-delay pacing is not a GPU fence API. Explicit texture/storage readbacks complete before caller-owned storage is released.",
+    "Ordinary mesh/particle interference, pass exclusions, shadows, temporal/E8 history, transparency, XR and other backends are deferred.",
+    "Fresh process per case is required; bounded native warning state is not shared across cases."
+  ]
+}

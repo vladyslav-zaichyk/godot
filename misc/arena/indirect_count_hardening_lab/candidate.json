@@ -1,0 +1,9 @@
+{
+  "native_source_commit": "00e1b43953e4b0bb136fe397782c9e1d030aa836",
+  "baseline_fixture_source_commit": "109202199e8b21a35fb0dd9fee4895ebaee7d309",
+  "sdk_version": "4.7.2-arena-dev-g00e1b.43953",
+  "manifest_sha256": "82d4e56756bd1673c283bcafbc3dc0db7337e9fecacf80ef279efb661e66354f",
+  "required_backend": "vulkan",
+  "required_renderer": "forward_plus",
+  "old_bundle_is_read_only": true
+}

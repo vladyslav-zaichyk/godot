@@ -1,0 +1,9 @@
+#version 450
+layout(set=0,binding=0,std430) readonly buffer ReadBank { uint words[]; } bank;
+layout(location=0) flat out uint color_bits;
+void main() {
+    const vec2 vertices[6]=vec2[6](vec2(-1,-1),vec2(1,-1),vec2(1,1),vec2(-1,-1),vec2(1,1),vec2(-1,1));
+    uint identity=uint(gl_VertexIndex)/6u;
+    gl_Position=vec4(vec2(-0.5+float(identity),0.0)+vertices[gl_VertexIndex%6]*vec2(0.35,0.70),0.0,1.0);
+    color_bits=bank.words[0]&7u;
+}

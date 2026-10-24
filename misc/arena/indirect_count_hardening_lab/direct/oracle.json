@@ -1,0 +1,1016 @@
+{
+  "contract": "e10-hardening-direct-oracle-v1",
+  "assembly": "DirectHardeningLab",
+  "inputs": [
+    "DirectHardeningLab.csproj",
+    "project.godot",
+    "Main.tscn",
+    "DirectHardeningContract.cs",
+    "ProbeLogger.cs",
+    "DrawVertex.glslinc",
+    "ReadVertex.glslinc",
+    "DrawFragment.glslinc",
+    "Producer.glslinc",
+    "oracle.json"
+  ],
+  "cases": {
+    "shader_pending_commands": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:read:commands:0",
+        "count:commands:pending:invalid",
+        "bind:alias-again:commands",
+        "draw:read:commands",
+        "bind:plain:0",
+        "count:alternate:ok",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "shader_recorded_commands": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:read:commands:0",
+        "draw:read:commands",
+        "bind:plain:0",
+        "count:commands:recorded:invalid",
+        "bind:read:commands:0",
+        "draw:read:commands",
+        "bind:plain:0",
+        "count:alternate:ok",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "shader_after_commands": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:plain:0",
+        "count:primary:ok",
+        "bind:read:safe:0",
+        "reject:alias:commands",
+        "draw:read:safe",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "A counted indirect bank cannot be bound as a shader resource in the same draw list.",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "zero_shader_after_commands": {
+      "operations": [
+        "produce:0",
+        "begin:main",
+        "bind:plain:0",
+        "count:primary:ok",
+        "bind:read:safe:0",
+        "reject:alias:commands",
+        "draw:read:safe",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "A counted indirect bank cannot be bound as a shader resource in the same draw list.",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "list_end_clear_commands": {
+      "operations": [
+        "produce:1",
+        "begin:first",
+        "bind:plain:0",
+        "count:primary:ok",
+        "end",
+        "begin:second",
+        "bind:read:commands:0",
+        "draw:read:commands",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "subpass_retention_commands": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:plain:0",
+        "count:primary:ok",
+        "next:subpass",
+        "bind:read:safe:1",
+        "reject:alias:commands",
+        "draw:read:safe",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "A counted indirect bank cannot be bound as a shader resource in the same draw list.",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "shader_pending_counter": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:read:counter:0",
+        "count:counter:pending:invalid",
+        "bind:alias-again:counter",
+        "draw:read:counter",
+        "bind:plain:0",
+        "count:alternate:ok",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "shader_recorded_counter": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:read:counter:0",
+        "draw:read:counter",
+        "bind:plain:0",
+        "count:counter:recorded:invalid",
+        "bind:read:counter:0",
+        "draw:read:counter",
+        "bind:plain:0",
+        "count:alternate:ok",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "shader_after_counter": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:plain:0",
+        "count:primary:ok",
+        "bind:read:safe:0",
+        "reject:alias:counter",
+        "draw:read:safe",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "A counted indirect bank cannot be bound as a shader resource in the same draw list.",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "zero_shader_after_counter": {
+      "operations": [
+        "produce:0",
+        "begin:main",
+        "bind:plain:0",
+        "count:primary:ok",
+        "bind:read:safe:0",
+        "reject:alias:counter",
+        "draw:read:safe",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "A counted indirect bank cannot be bound as a shader resource in the same draw list.",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "list_end_clear_counter": {
+      "operations": [
+        "produce:1",
+        "begin:first",
+        "bind:plain:0",
+        "count:primary:ok",
+        "end",
+        "begin:second",
+        "bind:read:counter:0",
+        "draw:read:counter",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "subpass_retention_counter": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:plain:0",
+        "count:primary:ok",
+        "next:subpass",
+        "bind:read:safe:1",
+        "reject:alias:counter",
+        "draw:read:safe",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "A counted indirect bank cannot be bound as a shader resource in the same draw list.",
+          "count": 1
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "failed_count_transaction": {
+      "operations": [
+        "produce:1",
+        "begin:main",
+        "bind:plain:0",
+        "count:invalid-counter:invalid",
+        "bind:read:commands:0",
+        "draw:read:commands",
+        "bind:plain:0",
+        "count:alternate:ok",
+        "end",
+        "readback:final"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                255,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "repeated_lists": {
+      "operations": [
+        "produce:1",
+        "begin:repeat0",
+        "bind:read:commands:0",
+        "bind:plain:0",
+        "count:primary:ok",
+        "bind:read:safe:0",
+        "reject:alias:commands",
+        "draw:read:safe",
+        "end",
+        "readback:repeat0",
+        "begin:repeat1",
+        "bind:read:commands:0",
+        "bind:plain:0",
+        "count:primary:ok",
+        "bind:read:safe:0",
+        "reject:alias:commands",
+        "draw:read:safe",
+        "end",
+        "readback:repeat1",
+        "begin:repeat2",
+        "bind:read:commands:0",
+        "bind:plain:0",
+        "count:primary:ok",
+        "bind:read:safe:0",
+        "reject:alias:commands",
+        "draw:read:safe",
+        "end",
+        "readback:repeat2"
+      ],
+      "rasters": [
+        {
+          "probe": "repeat0",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "repeat1",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "probe": "repeat2",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [
+        {
+          "kind": "error",
+          "message": "A counted indirect bank cannot be bound as a shader resource in the same draw list.",
+          "count": 3
+        }
+      ],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "persistent_commands": {
+      "operations": [
+        "produce:1",
+        "create:persistent",
+        "begin:main",
+        "bind:plain:0",
+        "count:persistent-commands:invalid",
+        "count:primary:ok",
+        "end",
+        "readback:final",
+        "free:persistent"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "wrong_device_commands": {
+      "operations": [
+        "produce:1",
+        "create:local-device",
+        "create:local-bank",
+        "begin:main",
+        "bind:plain:0",
+        "count:foreign-commands:invalid",
+        "count:primary:ok",
+        "end",
+        "readback:final",
+        "free:local-bank",
+        "free:local-device"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "persistent_counter": {
+      "operations": [
+        "produce:1",
+        "create:persistent",
+        "begin:main",
+        "bind:plain:0",
+        "count:persistent-counter:invalid",
+        "count:primary:ok",
+        "end",
+        "readback:final",
+        "free:persistent"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    },
+    "wrong_device_counter": {
+      "operations": [
+        "produce:1",
+        "create:local-device",
+        "create:local-bank",
+        "begin:main",
+        "bind:plain:0",
+        "count:foreign-counter:invalid",
+        "count:primary:ok",
+        "end",
+        "readback:final",
+        "free:local-bank",
+        "free:local-device"
+      ],
+      "rasters": [
+        {
+          "probe": "final",
+          "samples": [
+            {
+              "x": 8,
+              "y": 8,
+              "expected_rgba": [
+                255,
+                0,
+                0,
+                255
+              ]
+            },
+            {
+              "x": 24,
+              "y": 8,
+              "expected_rgba": [
+                0,
+                0,
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "resources": {
+        "caller_owned_final": 0,
+        "caller_requested_bytes_final": 0,
+        "local_owned_final": 0,
+        "local_devices_final": 0
+      },
+      "min_checks": 10
+    }
+  },
+  "not_qualified": [
+    "No native MultiMesh renderer/pass/cache recovery qualification in this direct consumer",
+    "No public vertex/index alias case: counted storage RIDs cannot be created with vertex/index owner and INDIRECT usage through the current public API",
+    "No FPS, timing, physical VRAM, sustained lifetime plateau or simulation/networking result",
+    "No unsupported-capability positive qualification; enabled draw count is a required prerequisite"
+  ]
+}
