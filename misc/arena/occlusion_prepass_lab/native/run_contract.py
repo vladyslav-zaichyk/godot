@@ -79,7 +79,10 @@ def main():
     if args.timeout < 1 or not re.fullmatch(r'\d+\.\d+\.\d+', args.dotnet_sdk_version):
         parser.error('Positive timeout and exact dotnet SDK version required.')
     engine, feed, receipt_path, output = map(ordinary, (args.engine, args.sdk_feed, args.native_receipt, args.output))
-    checkout = next((p for p in HERE.parents if (p / '.git').exists()), HERE)
+    # An extracted bundle may live inside an unrelated support Git repository.
+    # Protect the engine source checkout only for this source-tree layout.
+    checkout = next((p for p in HERE.parents if (p / '.git').exists()
+                     and p / 'misc/arena/occlusion_prepass_lab/native' == HERE), HERE)
     if output.exists() or any(output == p or p in output.parents or output in p.parents for p in (checkout, engine.parent, feed, receipt_path.parent, HERE)):
         parser.error('Use one fresh output outside the source/editor/feed/build receipts and not their ancestor.')
     if not engine.is_file() or not feed.is_dir() or not receipt_path.is_file():
