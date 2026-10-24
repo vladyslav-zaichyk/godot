@@ -127,9 +127,11 @@ def main():
     mode.add_argument('--compile-only', action='store_true', help='Default: build the managed consumer without launching Godot.')
     args = parser.parse_args()
     engine, feed, output = args.engine.resolve(), args.sdk_feed.resolve(), args.output.resolve()
-    checkout = next((p for p in HERE.parents if (p / '.git').exists()), HERE)
-    if output.exists() or output == checkout or checkout in output.parents:
-        parser.error('Use one fresh output directory outside this source checkout.')
+    checkout = next((p for p in HERE.parents if (p / '.git').exists()
+                     and (p / 'SConstruct').is_file() and (p / 'version.py').is_file()), HERE)
+    protected = (checkout, engine.parent, feed)
+    if output.exists() or any(output == root or root in output.parents for root in protected):
+        parser.error('Use one fresh output directory outside the Godot source, editor and SDK feed.')
     if not engine.is_file() or not feed.is_dir() or not args.sdk_version or args.timeout < 1 or not (1 <= args.archetypes <= 32 and 1 <= args.lods <= 4 and 1 <= args.segments <= 1024 and 1 <= args.units <= 256):
         parser.error('Matching editor/feed/SDK, positive timeout and bounded scene arguments are required.')
     if args.archetypes * args.lods * args.segments * args.units > 1_000_000 or (args.layout == 'packed' and args.lods * args.segments > 1024):
