@@ -1,10 +1,12 @@
 # E10b MultiMesh GPU count contract
 
-Status: proposed implementation contract, based on native source
-`82e80df4074789810a169959f6fe0ce8874ffc76`. E10a supplies the counted RD draw;
-E10b will connect it to a shader-driven MultiMesh. This stage changes
-documentation only. The E10a candidate remains an immutable control while
-its renderer owner tests it separately.
+Status: experimental native implementation at
+`00e1b43953e4b0bb136fe397782c9e1d030aa836`; GPU correctness and performance
+qualification remain pending. The design was pinned to E10a native source
+`82e80df4074789810a169959f6fe0ce8874ffc76`. E10b connects its counted RD draw
+to a shader-driven MultiMesh and adds a
+[bounded source consumer](../counted_multimesh_lab/README.md). The original E10a
+and other renderer candidates remain immutable controls.
 
 ## Scope and public API
 
@@ -169,6 +171,11 @@ Derive the allowance from explicit main-render context and single-view state;
 forward it at the main depth/opaque calls and admitted E8 motion call. Alpha and
 all secondary render-list constructors retain the disabled default.
 
+The first implementation conservatively disables this allowance whenever an XR
+primary interface exists, including non-XR views rendered during that time.
+One view alone cannot identify a non-XR render: mono XR also has one view.
+Per-viewport XR qualification is outside this first scope.
+
 The history flag stays independent and defaults false. Preserve E8's existing
 attachment/material guards, per-view motion demand, dynamic classification and
 main-view motion-list routing. Main-view motion color-list variants are allowed
@@ -217,4 +224,5 @@ savings without frame, correctness or lifetime regression.
 
 Paths in the last table are relative to `servers/rendering/`, except
 `servers/server_wrap_mt_common.h`. Line numbers describe the pinned native base;
-implementation will have its own source, SDK and qualification identities.
+the implementation and its source consumer have separate source, SDK and
+qualification identities in the candidate manifest.
