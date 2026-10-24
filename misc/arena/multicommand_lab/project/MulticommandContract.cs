@@ -228,7 +228,15 @@ public partial class MulticommandContract : Node
         _commandBytes = (_commandBytes + 15) & ~15;
         await OnRender(() => {
             _ids = Own(_rd.StorageBufferCreate((uint)_idWords * 4, Words(Enumerable.Repeat(uint.MaxValue, _idWords))), (uint)_idWords * 4);
-            _commands = Own(_rd.StorageBufferCreate((uint)_commandBytes, Words(Enumerable.Repeat(Poison, _commandBytes / 4)), (RenderingDevice.StorageBufferUsage)1), (uint)_commandBytes);
+            // A frame may render between this callback and the first producer callback.
+            // Publish legal empty commands before exposing any native owner; poison only guards/padding.
+            var initialCommands = Enumerable.Repeat(Poison, _commandBytes / 4).ToArray();
+            foreach (Command c in _records) {
+                int word = c.OffsetBytes / 4;
+                uint[] empty = { c.Geometry.IndexCount, 0, c.Geometry.FirstIndex, c.Geometry.VertexOffset, (uint)c.FirstInstance };
+                Array.Copy(empty, 0, initialCommands, word, 5);
+            }
+            _commands = Own(_rd.StorageBufferCreate((uint)_commandBytes, Words(initialCommands), (RenderingDevice.StorageBufferUsage)1), (uint)_commandBytes);
             var metadata = new List<uint>();
             foreach (Command c in _records) metadata.AddRange(new uint[] {
                 (uint)c.OffsetBytes / 4, (uint)c.IdBase, (uint)c.FirstInstance, (uint)c.Shape,

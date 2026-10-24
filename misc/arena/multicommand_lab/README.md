@@ -292,7 +292,9 @@ are disclosed rather than credited to batching alone.
 
 For distinct segment counts 1/default, both strides 20/32 and C0/C1/C2, four
 phases cover all visible, interior empty segments, reversed command order and
-all-empty output. The consumer reads every command/ID, including prefix/padding,
+all-empty output. Legal zero-instance commands are initialized before exposing
+any native owner, so an intervening frame cannot consume poisoned command data.
+The consumer reads every command/ID, including prefix/padding,
 the final record, sparse firstInstance ranges, duplicate/missing IDs and guard
 slots. C1/C2 compare complete ID/command/raster hashes. Up to three distinct
 identity pixel probes per phase independently check expected admission/color;
