@@ -2478,6 +2478,11 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("multimesh_allocate_data", "multimesh", "instances", "transform_format", "color_format", "custom_data_format", "use_indirect"), &RenderingServer::multimesh_allocate_data, DEFVAL(false), DEFVAL(false), DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("multimesh_attach_shared_buffers", "multimesh", "transform_buffer", "pool_record_capacity", "indirect_command_buffer", "command_byte_offset"), &RenderingServer::multimesh_attach_shared_buffers);
 	ClassDB::bind_method(D_METHOD("multimesh_attach_shared_draw_buffer", "multimesh", "draw_slot_capacity", "indirect_command_buffer", "command_byte_offset", "use_shader_motion_vectors"), &RenderingServer::multimesh_attach_shared_draw_buffer, DEFVAL(false));
+	ClassDB::bind_method(D_METHOD("multimesh_attach_shared_draw_command_span", "multimesh", "draw_slot_capacity", "indirect_command_buffer", "command_byte_offset", "command_count", "command_byte_stride", "submission_mode", "use_shader_motion_vectors"), &RenderingServer::multimesh_attach_shared_draw_command_span, DEFVAL(false));
+	ClassDB::bind_method(D_METHOD("multimesh_get_command_byte_offset", "multimesh"), &RenderingServer::multimesh_get_command_byte_offset);
+	ClassDB::bind_method(D_METHOD("multimesh_get_shared_draw_command_count", "multimesh"), &RenderingServer::multimesh_get_shared_draw_command_count);
+	ClassDB::bind_method(D_METHOD("multimesh_get_shared_draw_command_stride", "multimesh"), &RenderingServer::multimesh_get_shared_draw_command_stride);
+	ClassDB::bind_method(D_METHOD("multimesh_get_shared_draw_submission_mode", "multimesh"), &RenderingServer::multimesh_get_shared_draw_submission_mode);
 	ClassDB::bind_method(D_METHOD("multimesh_detach_shared_buffers", "multimesh"), &RenderingServer::multimesh_detach_shared_buffers);
 	ClassDB::bind_method(D_METHOD("multimesh_is_using_shared_buffers", "multimesh"), &RenderingServer::multimesh_is_using_shared_buffers);
 	ClassDB::bind_method(D_METHOD("multimesh_is_shader_driven", "multimesh"), &RenderingServer::multimesh_is_shader_driven);
@@ -2511,6 +2516,8 @@ void RenderingServer::_bind_methods() {
 
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_TRANSFORM_2D);
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_TRANSFORM_3D);
+	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP);
+	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW);
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INTERP_QUALITY_FAST);
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INTERP_QUALITY_HIGH);
 

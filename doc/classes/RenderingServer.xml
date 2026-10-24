@@ -2790,6 +2790,24 @@
 				Use [method multimesh_is_shader_driven] to query this mode and [method multimesh_detach_shared_buffers] to detach it. [method multimesh_get_buffer_rd_rid] returns an invalid RID because no transform pool exists; [method multimesh_get_command_buffer_rd_rid] returns the borrowed command RID. CPU instance setters/getters, transform-buffer operations, visible-count changes and engine-managed history are unavailable. Detach every command borrower, clear ID/pose [BufferRD] resources from every material, and retire queued rendering before freeing caller-owned commands, IDs or poses. Neither detachment nor MultiMesh destruction frees caller storage.
 			</description>
 		</method>
+		<method name="multimesh_attach_shared_draw_command_span">
+			<return type="int" enum="Error" />
+			<param index="0" name="multimesh" type="RID" />
+			<param index="1" name="draw_slot_capacity" type="int" />
+			<param index="2" name="indirect_command_buffer" type="RID" />
+			<param index="3" name="command_byte_offset" type="int" />
+			<param index="4" name="command_count" type="int" />
+			<param index="5" name="command_byte_stride" type="int" />
+			<param index="6" name="submission_mode" type="int" enum="RenderingServer.MultimeshIndirectSubmissionMode" />
+			<param index="7" name="use_shader_motion_vectors" type="bool" default="false" />
+			<description>
+				Experimental Arena extension: attaches a bounded span of caller-owned indexed indirect commands to a shader-driven MultiMesh. Call on the rendering thread. Inherits every topology, bounds, material, interpolation, Vulkan/Forward+ and lifetime restriction of [method multimesh_attach_shared_draw_buffer], including its independent history opt-in. No transform pool, ID storage, command allocation or readback is added. Failed attachment preserves the complete previous view.
+				The original signed 64-bit numeric arguments are checked before narrowing. Capacity is positive and capacity/offset/stride must fit signed 32-bit fields; offset is nonnegative and 4-byte aligned, count is between 1 and 1024, and stride is at least 20 bytes and divisible by 4, even at count 1. The full range [code]offset + (count - 1) * stride + 20[/code] must fit the supplied global RD indirect storage buffer. An empty slot has [code]instanceCount=0[/code]. The caller validates mesh-compatible geometry ranges and bounds every [code]firstInstance + instanceCount[/code] by capacity using wide arithmetic.
+				[constant MULTIMESH_INDIRECT_SUBMISSION_LOOP] issues one indirect draw per record with identical bindings and owner state. [constant MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW] issues the span in one RD call and returns [constant ERR_UNAVAILABLE] for an unsupported multi-command count; there is no automatic fallback. Count 1 requires no multidraw feature. LOOP does not require the whole count to fit the device multidraw maximum.
+				Every command shares one immutable indexed surface, material bindings, native owner, conservative bounds, push constants and per-pass rendering state. The span does not merge arbitrary mesh RIDs or different pipelines. Multiple models packed in one compatible surface may select different index/vertex ranges. Shader INSTANCE_ID includes firstInstance; both E8 evaluations must resolve the same current draw-slot identity. Per-camera/per-light command visibility remains the caller's responsibility.
+				Query offset/count/stride/mode through the corresponding read-only methods. A successful old single-command or transform-backed attachment resets count to 1, stride to 0 and mode to LOOP. Detach clears the metadata without freeing borrowed storage. Keep every dependency alive until queued and in-flight uses retire; frame callbacks are not GPU fences. GPU correctness, temporal quality and performance require separate qualification.
+			</description>
+		</method>
 		<method name="multimesh_create">
 			<return type="RID" />
 			<description>
@@ -2803,7 +2821,7 @@
 			<return type="void" />
 			<param index="0" name="multimesh" type="RID" />
 			<description>
-				Detaches storage attached by [method multimesh_attach_shared_buffers] or [method multimesh_attach_shared_draw_buffer] without freeing caller-owned buffers. Leaves an empty ordinary MultiMesh, preserving its mesh and custom bounds. Calling on an ordinary MultiMesh is a no-op. MultiMesh destruction also detaches borrowed storage. Ordinary indirect initialization behavior is unchanged.
+				Detaches storage attached by [method multimesh_attach_shared_buffers], [method multimesh_attach_shared_draw_buffer] or [method multimesh_attach_shared_draw_command_span] without freeing caller-owned buffers. Leaves an empty ordinary MultiMesh, preserving its mesh and custom bounds. Calling on an ordinary MultiMesh is a no-op. MultiMesh destruction also detaches borrowed storage. Ordinary indirect initialization behavior is unchanged.
 			</description>
 		</method>
 		<method name="multimesh_get_aabb" qualifiers="const">
@@ -2852,6 +2870,13 @@
 				[/codeblock]
 			</description>
 		</method>
+		<method name="multimesh_get_command_byte_offset" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Returns the borrowed command span's byte offset. Ordinary and detached MultiMeshes report 0. This query neither reads GPU contents nor retains borrowed resources.
+			</description>
+		</method>
 		<method name="multimesh_get_custom_aabb" qualifiers="const">
 			<return type="AABB" />
 			<param index="0" name="multimesh" type="RID" />
@@ -2871,6 +2896,27 @@
 			<param index="0" name="multimesh" type="RID" />
 			<description>
 				Returns the RID of the mesh that will be used in drawing this multimesh.
+			</description>
+		</method>
+		<method name="multimesh_get_shared_draw_command_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Returns the fixed allocated command count, including zero-instance slots. Old shared attachments report 1; ordinary, detached and invalid views report 0. This is CPU metadata, not a GPU-visible instance count.
+			</description>
+		</method>
+		<method name="multimesh_get_shared_draw_command_stride" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Returns the attached E9 command stride in bytes. Old single-command attachments and ordinary, detached or invalid views report 0. A failed rebind preserves the old value.
+			</description>
+		</method>
+		<method name="multimesh_get_shared_draw_submission_mode" qualifiers="const">
+			<return type="int" enum="RenderingServer.MultimeshIndirectSubmissionMode" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Returns the explicit attached submission mode. Old shared attachments and ordinary, detached or invalid views report [constant MULTIMESH_INDIRECT_SUBMISSION_LOOP]. No unsupported mode is selected automatically.
 			</description>
 		</method>
 		<method name="multimesh_get_visible_instances" qualifiers="const">
@@ -5110,6 +5156,12 @@
 		</constant>
 		<constant name="MULTIMESH_TRANSFORM_3D" value="1" enum="MultimeshTransformFormat">
 			Use [Transform3D] to store MultiMesh transform.
+		</constant>
+		<constant name="MULTIMESH_INDIRECT_SUBMISSION_LOOP" value="0" enum="MultimeshIndirectSubmissionMode">
+			Submit one indirect call per allocated command with identical owner and bindings. Explicit E9 control mode; count-one calls require no multidraw feature.
+		</constant>
+		<constant name="MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW" value="1" enum="MultimeshIndirectSubmissionMode">
+			Submit the compatible E9 command span in one RD call. Unsupported multi-command counts fail attachment without automatic fallback.
 		</constant>
 		<constant name="MULTIMESH_INTERP_QUALITY_FAST" value="0" enum="MultimeshPhysicsInterpolationQuality">
 			MultiMesh physics interpolation favors speed over quality.

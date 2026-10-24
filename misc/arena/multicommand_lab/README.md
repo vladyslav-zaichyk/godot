@@ -1,9 +1,10 @@
 # E9: bounded MultiMesh indirect command spans
 
-Status: **design only; implementation deferred by the renderer audit**.
-Native reference: `faf0e74ef180ad16bf5950057284b6af3c80f30a`.
-No API below exists yet. No E9 editor, SDK, consumer or GPU result is delivered.
-See [AUDIT.md](AUDIT.md) for the actual grouping and the implementation gate.
+Status: **experimental native prototype; real GPU and performance qualification pending**.
+Pre-E9 native reference: `faf0e74ef180ad16bf5950057284b6af3c80f30a`.
+Use a matching E9 editor/SDK and the bundled source consumer. Source inspection,
+compilation and CPU contracts do not establish Vulkan correctness or more FPS.
+See [AUDIT.md](AUDIT.md) for the initial grouping audit and its limited scope.
 
 ## Purpose and go/no-go gate
 
@@ -12,20 +13,26 @@ instance-list segments without issuing one RD call per command. A command span
 keeps one mesh, effective material, native geometry owner and binding state.
 It does not combine arbitrary meshes, LODs, materials or lighting owners.
 
-The current real GPU renderer already has eight global LOD owners with different
-meshes. They are not eight compatible commands. E9 is not justified merely by
-the population reaching one million or by inflating a synthetic command count.
+The audited current GPU renderer already has eight global LOD owners with
+different meshes. The prototype does not combine those owners. The author has
+authorized an experiment for the future renderer: many archetypes, LODs and
+independently produced spatial segments. A representative fixture can qualify
+the API and isolate costs before that production workload exists. It cannot
+establish an FPS benefit for the current renderer.
 
-Before native implementation, identify a real same-state segmented workload and
-record why the existing globally compacted, single-command path is insufficient.
-The renderer owner supplies the producer cost and actual command/pass counts.
-There is no mandatory numeric draw-count threshold: few commands usually leave
-little submission work to save, and a large count alone proves no bottleneck.
+Before production adoption, identify the real compatible state groups and why
+global single-command compaction is insufficient. Include the producer cost and
+actual command/pass counts. A large synthetic count alone proves no bottleneck.
+Behavior differences can remain stable-ID data without changing rendering state.
+Different models can share a span only if their geometry is packed into the same
+immutable indexed surface with compatible bindings/materials; commands then
+select index/vertex ranges. This prototype adds no native geometry allocator or
+arbitrary external-buffer attachment. The packed fixture is a separate probe.
 
 The RD whole-span validation defect described below is independently actionable.
 Repairing it does not require adopting the MultiMesh API or promise more FPS.
 
-## Proposed API and defaults
+## Experimental API and defaults
 
 Use a new RenderingServer method instead of extending the existing signature:
 
@@ -45,8 +52,12 @@ Error multimesh_attach_shared_draw_command_span(
 fallback. For K>1, unsupported MULTI_DRAW returns `ERR_UNAVAILABLE` before
 mutation. MULTI_DRAW K=1 is allowed without the multidraw feature, since it is
 one ordinary indirect call. LOOP K<=1024 also remains legal when the multidraw
-maximum is 1: every submitted call has count 1. Retain the mode for diagnostics and
-read-only count/stride/mode queries that can verify transactional rebinds.
+maximum is 1: every submitted call has count 1. Read-only
+`multimesh_get_command_byte_offset`, `multimesh_get_shared_draw_command_count`,
+`multimesh_get_shared_draw_command_stride` and
+`multimesh_get_shared_draw_submission_mode` queries verify transactional rebinds.
+Non-shared views report count/stride 0 and LOOP. Old shared attachments report
+count 1, stride 0 and LOOP. Detach resets all new metadata.
 
 Initial scope: Windows x64, Vulkan/Forward+, 3D, the existing E5 draw-only mode,
 one immutable indexed triangle surface, opaque material and one view timeline.
@@ -113,10 +124,10 @@ E8 GPU qualification is still pending and is not inherited by this design.
 
 ## Whole-span validation and capability plumbing
 
-Current Forward+ submits `count=1, stride=0`; RD/graph/Vulkan already forward a
-larger count. Current RD only checks the first command's byte range, using
-32-bit addition, after some descriptor preparation. This is insufficient for
-multi-command input and is a distinct correctness fix (E9a).
+Before E9, Forward+ submitted `count=1, stride=0`; RD/graph/Vulkan already
+forwarded a larger count. RD checked only the first command's byte range with
+32-bit addition after descriptor preparation. The independent E9a patch now
+validates the complete backend-effective range before draw-state mutation.
 
 For E9 attachment validate type/global RD ownership, indirect usage, alignment,
 mode, capacity, whole range, topology and device support before changing any
@@ -141,8 +152,8 @@ For the generic RD entry point:
   therefore no pipeline/index binding is needed for the no-op itself.
 - For count 1, stride is ignored. Validate aligned offset and the one-command
   range with wide arithmetic; retain existing callers' stride 0 behavior.
-- For count > 1, validate stride alignment/minimum size, complete range and the
-  actually enabled multiDrawIndirect feature/device maximum.
+- For Vulkan count > 1, validate stride alignment/minimum size, complete range
+  and the actually enabled multiDrawIndirect feature/device maximum.
 - Existing public RD offset/count/stride bind directly to uint32. E9a keeps
   that signature and validates the values received after conversion. It cannot
   claim to reject an original GDScript negative/oversized integer before
@@ -157,10 +168,14 @@ Physical support alone is not sufficient. Reuse the existing indirect-first-
 instance support/attachment guard. Do not assume every Vulkan device supports
 either feature. The new E9 attachment remains Vulkan-only.
 
-Whole-range checks apply to generic RD consumers on all backends. Initially the
-new enabled-feature/maximum gate applies only to verified Vulkan capabilities;
-retain existing generic D3D12/Metal multidraw behavior. An unimplemented backend
-capability is unknown, not a false maximum 1 that rejects existing working calls.
+Whole-range checks use each backend's actual stride: Vulkan uses the validated
+requested stride, D3D12 uses packed 16/20-byte command signatures regardless of
+requested stride, and Metal advances by the requested stride, including zero.
+Do not impose Vulkan's minimum stride rule on existing non-Vulkan calls.
+Initially the new enabled-feature/maximum gate applies only to verified Vulkan
+capabilities. An unimplemented backend capability is unknown, not a false maximum
+1 that rejects existing working calls. D3D12 and Metal execution still require
+their own regression gates; this delivery's native build targets Vulkan.
 Before extending that gate to another backend, implement truthful limits and
 regression coverage for its current multi-command path.
 If a public feature/limit enum is added, append values to preserve existing IDs.
@@ -240,8 +255,10 @@ windows under fixed scene/camera/grouping/build/settings. Acceptance requires
 repeatable full-frame improvement against the strongest applicable control,
 without worse tails, errors, leaks or quality loss. Lower call counts or a
 synthetic C1 win alone do not establish an improvement to the current renderer.
-Archive/defer the feature if C0 remains faster or no real segmented workload
-requires it. No E9 FPS or memory result is claimed by this document.
+Keep the prototype experimental if C0 remains faster or no real segmented
+workload requires it. A serial correctness-only fixture compactor is not the
+optimized production C0; qualify that producer before using it for performance
+acceptance. No E9 FPS or memory result is claimed by this document.
 
 ## Sources
 

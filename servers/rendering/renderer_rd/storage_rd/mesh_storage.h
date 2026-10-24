@@ -260,6 +260,9 @@ private:
 		bool shader_driven = false; // No per-instance transform storage; materials own the pose.
 		bool shader_motion_vectors = false; // Shader owns both rendered pose samples; no native history storage.
 		uint32_t command_byte_offset = 0;
+		uint32_t shared_draw_command_count = 0;
+		uint32_t shared_draw_command_stride = 0;
+		RSE::MultimeshIndirectSubmissionMode shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
 
 		bool dirty = false;
 		MultiMesh *dirty_list = nullptr;
@@ -671,6 +674,10 @@ public:
 	virtual void _multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors = false, bool p_use_custom_data = false, bool p_use_indirect = false) override;
 	virtual Error multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) override;
 	virtual Error multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors) override;
+	virtual Error multimesh_attach_shared_draw_command_span(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_indirect_command_buffer, int64_t p_command_byte_offset, int64_t p_command_count, int64_t p_command_byte_stride, RSE::MultimeshIndirectSubmissionMode p_submission_mode, bool p_use_shader_motion_vectors) override;
+	virtual int multimesh_get_shared_draw_command_count(RID p_multimesh) const override;
+	virtual int multimesh_get_shared_draw_command_stride(RID p_multimesh) const override;
+	virtual RSE::MultimeshIndirectSubmissionMode multimesh_get_shared_draw_submission_mode(RID p_multimesh) const override;
 	virtual void multimesh_detach_shared_buffers(RID p_multimesh) override;
 	virtual bool multimesh_is_using_shared_buffers(RID p_multimesh) const override;
 	virtual bool multimesh_is_shader_driven(RID p_multimesh) const override;
@@ -711,7 +718,7 @@ public:
 	bool _multimesh_uses_motion_vectors_offsets(RID p_multimesh);
 	bool _multimesh_uses_motion_vectors(RID p_multimesh);
 
-	_FORCE_INLINE_ uint32_t multimesh_get_command_byte_offset(RID p_multimesh) const {
+	_FORCE_INLINE_ int multimesh_get_command_byte_offset(RID p_multimesh) const override {
 		const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 		ERR_FAIL_NULL_V(multimesh, 0);
 		return multimesh->command_byte_offset;

@@ -260,6 +260,11 @@ public:
 	virtual void multimesh_allocate_data(RID p_multimesh, int p_instances, RSE::MultimeshTransformFormat p_transform_format, bool p_use_colors = false, bool p_use_custom_data = false, bool p_use_indirect = false) = 0;
 	virtual Error multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) = 0;
 	virtual Error multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors = false) = 0;
+	virtual Error multimesh_attach_shared_draw_command_span(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_indirect_command_buffer, int64_t p_command_byte_offset, int64_t p_command_count, int64_t p_command_byte_stride, RSE::MultimeshIndirectSubmissionMode p_submission_mode, bool p_use_shader_motion_vectors = false) = 0;
+	virtual int multimesh_get_command_byte_offset(RID p_multimesh) const = 0;
+	virtual int multimesh_get_shared_draw_command_count(RID p_multimesh) const = 0;
+	virtual int multimesh_get_shared_draw_command_stride(RID p_multimesh) const = 0;
+	virtual RSE::MultimeshIndirectSubmissionMode multimesh_get_shared_draw_submission_mode(RID p_multimesh) const = 0;
 	virtual void multimesh_detach_shared_buffers(RID p_multimesh) = 0;
 	virtual bool multimesh_is_using_shared_buffers(RID p_multimesh) const = 0;
 	virtual bool multimesh_is_shader_driven(RID p_multimesh) const = 0;
@@ -1104,6 +1109,7 @@ VARIANT_ENUM_CAST_EXT(RSE::ArrayCustomFormat, RenderingServer::ArrayCustomFormat
 VARIANT_ENUM_CAST_EXT(RSE::PrimitiveType, RenderingServer::PrimitiveType);
 VARIANT_ENUM_CAST_EXT(RSE::BlendShapeMode, RenderingServer::BlendShapeMode);
 VARIANT_ENUM_CAST_EXT(RSE::MultimeshTransformFormat, RenderingServer::MultimeshTransformFormat);
+VARIANT_ENUM_CAST_EXT(RSE::MultimeshIndirectSubmissionMode, RenderingServer::MultimeshIndirectSubmissionMode);
 VARIANT_ENUM_CAST_EXT(RSE::MultimeshPhysicsInterpolationQuality, RenderingServer::MultimeshPhysicsInterpolationQuality);
 VARIANT_ENUM_CAST_EXT(RSE::LightType, RenderingServer::LightType);
 VARIANT_ENUM_CAST_EXT(RSE::LightParam, RenderingServer::LightParam);
