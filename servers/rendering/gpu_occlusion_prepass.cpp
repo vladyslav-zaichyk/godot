@@ -32,6 +32,46 @@
 
 #include "core/object/class_db.h"
 
+Error GpuOcclusionMetadata::validate_camera(const Transform3D &p_camera, const Projection &p_projection, const Projection &p_corrected_projection, bool p_orthogonal) {
+	const real_t camera_determinant = p_camera.basis.determinant();
+	if (!p_camera.is_finite() || !Math::is_finite(camera_determinant) || camera_determinant == 0 || !p_camera.affine_inverse().is_finite()) {
+		return ERR_INVALID_PARAMETER;
+	}
+	for (const Projection *projection : { &p_projection, &p_corrected_projection }) {
+		for (uint32_t column = 0; column < 4; column++) {
+			if (!projection->columns[column].is_finite()) {
+				return ERR_INVALID_PARAMETER;
+			}
+		}
+		const real_t determinant = projection->determinant();
+		if (!Math::is_finite(determinant) || determinant == 0) {
+			return ERR_INVALID_PARAMETER;
+		}
+	}
+	// Admit native axis-aligned orthographic and centered perspective matrices.
+	// Off-center/custom frusta have their own future qualification boundary.
+	if (p_projection.columns[0].x <= 0 || p_projection.columns[1].y <= 0 ||
+			p_projection.columns[0].y != 0 || p_projection.columns[0].z != 0 || p_projection.columns[0].w != 0 ||
+			p_projection.columns[1].x != 0 || p_projection.columns[1].z != 0 || p_projection.columns[1].w != 0 ||
+			p_projection.columns[2].x != 0 || p_projection.columns[2].y != 0) {
+		return ERR_UNAVAILABLE;
+	}
+	if (p_orthogonal) {
+		if (p_projection.columns[2].w != 0 || p_projection.columns[3].w != 1) {
+			return ERR_UNAVAILABLE;
+		}
+	} else if (p_projection.columns[2].w != -1 || p_projection.columns[3].w != 0 || p_projection.columns[3].x != 0 || p_projection.columns[3].y != 0) {
+		return ERR_UNAVAILABLE;
+	}
+	// These getters assume the original OpenGL projection, NOT corrected reverse Z.
+	const real_t z_near = p_projection.get_z_near();
+	const real_t z_far = p_projection.get_z_far();
+	if (!Math::is_finite(z_near) || !Math::is_finite(z_far) || z_far <= z_near || (!p_orthogonal && z_near <= 0)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	return OK;
+}
+
 Error GpuOcclusionMetadata::validate_consumer_numbers(int64_t p_candidate_base, int64_t p_capacity, int64_t p_draw_capacity, int64_t p_command_offset) {
 	if (p_capacity <= 0 || p_capacity > INT32_MAX || p_draw_capacity <= 0 || p_draw_capacity > INT32_MAX ||
 			p_candidate_base < p_capacity || p_candidate_base > INT32_MAX || p_command_offset < 0 || p_command_offset > INT32_MAX || (p_command_offset % 4) != 0) {

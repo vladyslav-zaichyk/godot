@@ -1,11 +1,15 @@
 # E13a current-frame occlusion prepass contract
 
-Status: proposed, 2026-10-24. No native implementation or new editor/SDK.
-Audit base: `8b31ae443769b6147f7db26e77bb930de549c6d3`.
-The reference fixture uses the immutable E12b editor, native
-`7d59f5064a6cd40a1cf2aaa578b8e90d29d1cbe8`, SDK
-`4.7.2-arena-dev-g7d59f5064a`. GPU execution waits for renderer A/B release.
-Reference success cannot qualify this proposed native contract.
+Status: experimental native implementation with a separate E13b perspective
+admission extension, 2026-10-25. Original audit base:
+`8b31ae443769b6147f7db26e77bb930de549c6d3`.
+The corrected no-GI native orthographic stand passed 14 GPU views / 821 checks
+on native `4010f6133b6e7ea4473250c739a012fa33a2d16a`. This does not qualify the
+perspective extension or animated bounds on a new editor. Those need their own
+exact-build regressions and independent numerical GPU gate.
+The historical `fixture/` proxy reference remains pinned to the immutable E12b
+editor, native `7d59f5064a6cd40a1cf2aaa578b8e90d29d1cbe8`, SDK
+`4.7.2-arena-dev-g7d59f5064a`; proxy success cannot qualify native ordering.
 
 ## Purpose and first boundary
 
@@ -19,8 +23,12 @@ First native scope: Windows x64, Vulkan Forward+, one opted main viewport and
 one view, full internal render region, ordinary depth prepass enabled, 1:1
 internal resolution. Disable MSAA, TAA, temporal upscaling, motion-vector demand,
 SSAO/SSIL/SSR, GI, volumetric fog, stencil, transparency, shadows, reflection
-probes, XR and wireframe/debug replacements. Initial camera is orthographic;
-perspective/near-plane clipping is a separate qualification gate. This is a
+probes, XR and wireframe/debug replacements. Admitted cameras are orthographic
+or ordinary centered perspective. Off-center/custom perspective frusta remain
+unsupported and select complete fallback. Nonfinite/singular native camera or
+projection and invalid depth-plane order reject recording before the E13 split;
+this does not validate arbitrary caller GPU data or precede all renderer setup.
+Perspective/animated-bound GPU correctness remains a separate gate. This is a
 bounded capability experiment, not a replacement scene renderer or simulation.
 
 Eligible occluders are explicitly selected ordinary static MeshInstance3D
@@ -69,9 +77,9 @@ depth attachment write -> compute sample -> attachment read/write, plus producer
 storage write -> shader read/indirect command read. Use the existing RD graph;
 callback completion is CPU recording completion, never a GPU fence.
 
-## Proposed metadata API
+## Metadata API
 
-Names and signatures are design targets, not available SDK methods:
+These signatures are implemented in the separate experimental native SDK:
 
 ```cpp
 Error viewport_configure_gpu_occlusion_prepass(
@@ -215,6 +223,17 @@ rectangle. Enlarge projection/texel coverage conservatively. Sample all intersec
 cells at the chosen level with integer/nearest access; no center-only, average,
 bilinear, representative MSAA sample or heuristic previous-frame depth proof.
 
+For perspective, project all eight conservative 3D bound corners using the
+actual corrected context matrix and current camera. Do not apply depth/Y
+correction twice or extract near/far with original-projection formulas from
+that corrected matrix. Unsafe/nonpositive clip W, near-plane crossing, a camera
+inside the bound or an uncertified proof keeps the identity visible or uses
+complete fallback; a four-flat-corner screen rectangle is not a general proof.
+Start the independent one-owner VAT gate with the certified all-frame animation
+envelope, transformed by the published root with conservative numerical padding.
+Caller owns certificates, active/generation state, VAT samples and root/bound
+snapshot consistency; invalid rendered GPU geometry requires caller rejection.
+
 Bounds include the entire current animated pose. Near-plane intersections,
 uncertified deformation, nonfinite values, empty/ambiguous projection, unknown
 camera/extent/resource identity or unsupported format keep the unit visible or
@@ -312,6 +331,10 @@ million-unit capacity, full release-driver or physical VRAM claim exists here.
 - [MultiMesh culling/LOD proposal 10669](https://github.com/godotengine/godot-proposals/issues/10669):
   related individual-instance workload; no performance figure is inherited.
 
-The pinned source audit and unchanged editor identities accompany the task's
-handoff. Native API code, matching SDK/build and real-driver results are later
-separate deliverables.
+The pinned source audit and unchanged editor identities accompany each task's
+handoff. Native API code and exact editor/SDK identities are separate from
+real-driver acceptance. Run the corrected 14 orthographic controls on every new
+perspective editor before the integration owner's P01-P08 perspective/VAT gate.
+TAA/E8 and valid fallback history follow independently; eight LOD owners/ranges
+are a later integration experiment. No editor-default or performance promotion
+follows from source/build success.

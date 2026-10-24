@@ -50,7 +50,7 @@
 		<method name="get_projection" qualifiers="const">
 			<return type="Projection" />
 			<description>
-				Returns the actual corrected native projection, including Godot depth/Y correction. Do not apply those corrections again. Returns identity when inactive. Perspective projection is outside the first qualification scope.
+				Returns the actual corrected native projection, including Godot depth/Y correction, for the admitted orthographic or centered perspective view. Do not apply those corrections again or use near/far extraction formulas that assume an uncorrected projection. Perspective culling must conservatively handle the full projected bound and near-plane or nonpositive clip-W uncertainty. Returns identity when inactive. TAA and motion-vector demand remain outside this scope.
 			</description>
 		</method>
 		<method name="get_view_index" qualifiers="const">

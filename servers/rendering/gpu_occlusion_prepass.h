@@ -59,6 +59,8 @@ struct GpuOcclusionConsumer {
 
 namespace GpuOcclusionMetadata {
 
+// Internal admission only; caller storage and animated bounds are not inspected.
+Error validate_camera(const Transform3D &p_camera, const Projection &p_projection, const Projection &p_corrected_projection, bool p_orthogonal);
 Error validate_consumer_numbers(int64_t p_candidate_base, int64_t p_capacity, int64_t p_draw_capacity, int64_t p_command_offset);
 bool intervals_overlap(uint64_t p_begin_a, uint64_t p_size_a, uint64_t p_begin_b, uint64_t p_size_b);
 bool consumers_conflict(const GpuOcclusionConsumer &p_a, const GpuOcclusionConsumer &p_b);

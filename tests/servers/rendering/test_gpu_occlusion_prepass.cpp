@@ -37,6 +37,86 @@ TEST_FORCE_LINK(test_gpu_occlusion_prepass)
 
 namespace TestGpuOcclusionPrepass {
 
+TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Camera admission supports perspective FOV and aspect changes without temporal features") {
+	using GpuOcclusionMetadata::validate_camera;
+	Projection correction;
+	correction.set_depth_correction(true);
+	const Transform3D camera(Basis(Vector3(0, 1, 0), 0.7), Vector3(3, -2, 8));
+	for (real_t fov : { real_t(30), real_t(75), real_t(120) }) {
+		for (real_t aspect : { real_t(0.5), real_t(2), real_t(127.0 / 63.0) }) {
+			for (bool flip_fov : { false, true }) {
+				Projection projection;
+				projection.set_perspective(fov, aspect, 0.1, 100, flip_fov);
+				CHECK(validate_camera(camera, projection, correction * projection, false) == OK);
+			}
+		}
+	}
+	Projection orthogonal;
+	orthogonal.set_orthogonal(4, 2, 1, 9);
+	CHECK(validate_camera(camera, orthogonal, correction * orthogonal, true) == OK);
+	// Finite off-center frusta remain an explicit unsupported-view fallback.
+	Projection frustum;
+	frustum.set_frustum(2, 2, Vector2(0.2, 0), 0.1, 100);
+	CHECK(validate_camera(camera, frustum, correction * frustum, false) == ERR_UNAVAILABLE);
+}
+
+TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Invalid camera or depth projection cannot enter the producer") {
+	using GpuOcclusionMetadata::validate_camera;
+	Projection correction;
+	correction.set_depth_correction(true);
+	Projection projection;
+	projection.set_perspective(75, 2, 1, 9);
+	const Projection corrected = correction * projection;
+	Transform3D camera;
+	camera.basis.set_column(0, Vector3());
+	CHECK(validate_camera(camera, projection, corrected, false) == ERR_INVALID_PARAMETER);
+	camera = Transform3D();
+	camera.origin.x = Math::INF;
+	CHECK(validate_camera(camera, projection, corrected, false) == ERR_INVALID_PARAMETER);
+	for (real_t invalid : { real_t(Math::INF), real_t(Math::NaN) }) {
+		Projection broken = projection;
+		broken.columns[0].x = invalid;
+		CHECK(validate_camera(Transform3D(), broken, corrected, false) == ERR_INVALID_PARAMETER);
+		broken = corrected;
+		broken.columns[1].y = invalid;
+		CHECK(validate_camera(Transform3D(), projection, broken, false) == ERR_INVALID_PARAMETER);
+	}
+	Projection singular = projection;
+	singular.columns[0] = Vector4();
+	CHECK(validate_camera(Transform3D(), singular, corrected, false) == ERR_INVALID_PARAMETER);
+	CHECK(validate_camera(Transform3D(), projection, singular, false) == ERR_INVALID_PARAMETER);
+	projection.set_perspective(75, 2, -1, 9);
+	CHECK(validate_camera(Transform3D(), projection, correction * projection, false) == ERR_INVALID_PARAMETER);
+	projection.set_perspective(75, 2, 9, 1);
+	CHECK(validate_camera(Transform3D(), projection, correction * projection, false) == ERR_INVALID_PARAMETER);
+	projection.set_perspective(75, 2, 0, 9);
+	CHECK(validate_camera(Transform3D(), projection, correction * projection, false) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Context preserves corrected perspective and the actual camera snapshot") {
+	Projection projection;
+	projection.set_perspective(75, 2, 1, 9);
+	Projection correction;
+	correction.set_depth_correction(true);
+	const Projection corrected = correction * projection;
+	const Vector4 near_clip = corrected.xform(Vector4(0, 0, -1, 1));
+	const Vector4 far_clip = corrected.xform(Vector4(0, 0, -9, 1));
+	CHECK(near_clip.w == doctest::Approx(1));
+	CHECK(near_clip.z / near_clip.w == doctest::Approx(1));
+	CHECK(far_clip.z / far_clip.w == doctest::Approx(0).epsilon(0.00001));
+	CHECK(corrected.xform(Vector4(0, 1, -3, 1)).y < 0);
+	const Transform3D camera(Basis(Vector3(0, 1, 0), 0.7), Vector3(3, -2, 8));
+	Ref<RenderGpuOcclusionContext> context;
+	context.instantiate();
+	context->prepare(RID::from_uint64(1), 2, 3, 0, Size2i(127, 63), corrected, camera, RID::from_uint64(4), 5);
+	CHECK(context->get_projection() == corrected);
+	CHECK(context->get_camera_transform() == camera);
+	CHECK(context->get_internal_size() == Size2i(127, 63));
+	context->invalidate();
+	CHECK(context->get_projection() == Projection());
+	CHECK(context->get_camera_transform() == Transform3D());
+}
+
 static GpuOcclusionConsumer consumer(uint64_t p_instance, int64_t p_base, int64_t p_command_offset) {
 	GpuOcclusionConsumer result;
 	result.instance = RID::from_uint64(p_instance);
