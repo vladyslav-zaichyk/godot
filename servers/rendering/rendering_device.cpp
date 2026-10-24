@@ -6213,7 +6213,7 @@ bool RenderingDevice::_draw_list_uniform_set_has_counted_alias(const UniformSet 
 	return false;
 }
 
-Error RenderingDevice::_draw_list_validate_counted_uniform_sets() const {
+Error RenderingDevice::_draw_list_validate_counted_uniform_sets() {
 	if (draw_list.counted_indirect_trackers.is_empty()) {
 		return OK;
 	}

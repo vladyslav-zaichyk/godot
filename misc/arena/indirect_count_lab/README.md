@@ -1,9 +1,10 @@
-# E10 research: GPU-sourced indirect draw count
+# E10a: GPU-sourced RenderingDevice indirect draw count
 
-Status: **proposed contract only**. No native API, editor, SDK or GPU result is
-delivered here. Research source is `bf946e0472a510694f355340f0df30a43e3106fa`,
-including the E9 native implementation `91592ae7841f587b02a0309f2f7b82bed430892f`.
-The renderer owner continues testing its immutable E9 bundle independently.
+Status: **experimental native prototype; real GPU and performance validation pending**.
+Use an exact matching editor, managed API and SDK identified by the candidate
+manifest. The procedural RD consumer defaults to compile-only. A native build
+or CPU pass does not qualify actual Vulkan execution. The renderer owner
+continues testing its immutable E9 bundle independently.
 See [source audit and decision](AUDIT.md).
 
 ## Decision
@@ -15,7 +16,7 @@ remove native owners, reduce geometry work, or guarantee a shorter CPU frame.
 Command compaction/publication adds work. An aggregate command is preferable
 when the existing geometry/ID arrangement permits it cheaply.
 
-Recommend two independently reviewable implementation stages:
+The two stages remain independently reviewable:
 
 1. **E10a: RD capability and count submission.** Enable the optional Vulkan
    device extension, expose truthful feature/limit queries, add render-graph
@@ -25,12 +26,14 @@ Recommend two independently reviewable implementation stages:
    view, transactional attachment/reset/query behavior, Forward+ routing and
    a procedural source consumer. Production integration remains separate.
 
-Neither stage is implemented in this research revision; no new build is
-produced. Adoption requires applicable R14/future-workload measurements.
+E10a implements the RD stage and the small source consumer. E10b remains a
+proposal: there is no counted MultiMesh attachment in this candidate.
+Adoption requires applicable R14/future-workload measurements.
 
 ## Proposed API and scope
 
-Working names; all numeric inputs below are signed 64-bit until checked:
+The RD signature is implemented; the RenderingServer signature below is the
+future E10b proposal. Numeric inputs retain signed 64-bit values until checked:
 
 ```cpp
 Error RenderingDevice::draw_list_draw_indirect_count(
@@ -45,7 +48,12 @@ Error RenderingServer::multimesh_attach_shared_draw_command_span_count(
     bool use_shader_motion_vectors = false);
 ```
 
-Preserve the old RD uint32 signature, E9 API and existing enum values. Append
+E10a preserves the old RD uint32 signature, E9 API and existing enum values.
+`Features.SUPPORTS_DRAW_INDIRECT_COUNT` and `Limit.LIMIT_MAX_DRAW_INDIRECT_COUNT`
+are public queries. The limit is zero when unsupported and otherwise is the
+count-specific physical maximum, independent of ordinary multidraw support.
+
+The following native-view rules belong to future E10b. Append
 a distinct counted submission enum value; old span attachment must reject it
 because that API supplies no counter. Existing command-count queries return
 the configured maximum in counted mode, never a GPU readback. Add count RID
@@ -60,13 +68,12 @@ own gates; shadows and other passes do not inherit qualification.
 
 ## Device capability
 
-The existing Vulkan driver wrappers are insufficient: this revision does not
-request the count extension or enable the corresponding core feature.
-For the first patch, request optional `VK_KHR_draw_indirect_count` and use its
-KHR entrypoints only after extension enablement and function-pointer checks.
+The research base had Vulkan wrappers without count feature enablement.
+E10a requests optional `VK_KHR_draw_indirect_count` and uses its KHR entrypoints
+only after extension enablement and function-pointer checks.
 Unsupported hardware must still initialize normally and report unavailable.
 
-Append a public support query and count-specific maximum query. Keep these
+E10a appends a public support query and count-specific maximum query. Keep these
 separate from ordinary `multiDrawIndirect` and from `drawIndirectFirstInstance`.
 The count operation has its own capability contract; preserve E5's separate
 first-instance requirement. D3D12/Metal report unsupported in this first scope.
@@ -77,7 +84,9 @@ and [device-create rules](https://docs.vulkan.org/refpages/latest/refpages/sourc
 
 ## Storage, validation and synchronization
 
-Both inputs must be live same-device storage-buffer RIDs with INDIRECT usage.
+Both inputs must be live same-device nonpersistent storage-buffer RIDs with INDIRECT usage.
+Dynamic persistent buffers are rejected: their per-frame regions need an
+explicit offset contract that E10a does not implement.
 Use the existing storage-buffer indirect creation flag. A counter is one
 uint32; offsets align to four. Validate its complete four-byte range and the
 entire maximum command span with wide arithmetic before descriptor, tracker,
@@ -110,14 +119,13 @@ records the draw and its dependencies. No CPU count readback or implicit LOOP
 fallback is permitted.
 
 The current graph cannot combine arbitrary shader/vertex/index reads with
-indirect reads of one tracker inside a draw list. V1 must preflight and reject
-these aliases before mutation, covering already-recorded uses, pending bound
-resources and subsequent bindings/draws in the same list. Checking only the
-new entrypoint is insufficient: counted draw followed by an ordinary shader
-draw of the same bank must also be handled. This needs bidirectional release
-preflight/reservation on affected recording paths, or combined-read graph
-support as a prerequisite. Resolve and test that choice before implementing
-the counted path. Do not rely on DEV-only conflict messages.
+indirect reads of one tracker inside a draw list. E10a rejects these aliases
+before mutation. Read-only graph preflight covers recorded uses; descriptor
+preflight covers pending shader resources. Per-list reservations reject later
+shader/vertex/index bindings and ordinary draws. Reservations survive subpass
+switches because those subpasses share the graph's usage list. They clear only
+at full draw-list end. These checks are present outside DEBUG/DEV conditionals;
+actual API call-order and subpass GPU probes still need runtime qualification.
 
 Caller owns both buffers. Borrowers detach and pending GPU consumption retires
 before caller free/reuse. One borrower cannot free another's storage. Use an
@@ -163,3 +171,34 @@ evidence. Report observed active/maximum commands per owner; predicted command
 counts are not hardware draw instrumentation. Accept only repeatable benefit
 without frame, correctness or lifetime regression. Source research establishes
 none of those performance results.
+
+## Small E10a consumer and deferred GPU execution
+
+Source runner: `fixture/run_contract.py`. A portable candidate flattens that
+directory; its runner is `indirect_count_lab/run_contract.py`. Both use the
+same committed inputs. Always use the candidate's exact SDK/native SHA:
+
+```powershell
+python -B <runner> --engine <candidate/editor.exe> --sdk-feed <candidate/NuGetFeed> --sdk-version <exact-sdk> --engine-hash <full-native-sha> --output <fresh-directory> --compile-only
+```
+
+Compilation launches only dotnet. After the renderer A/B slot is released,
+replace `--compile-only` with explicit `--run-gpu`. It opens a Vulkan/Forward+
+numerical subset. No GPU run is part of building or packaging this candidate.
+
+The fixture uses direct RD indexed/nonindexed commands, separate/shared-prefix
+banks, offsets 32 and 4/12, strides 20/32, maximum 1/4, K->0->1 transitions and
+legal max+1 clamping when the physical limit permits it. Two separate compute
+lists produce commands and the counter before drawing; counter readback is
+only after consumption. Every tail record is legal and nonempty. The oracle
+checks command/prefix/tail bytes, post-draw counters, five pixels and equivalent
+full-texture hashes. FirstInstance is zero throughout, so the fixture does not
+assume a separate first-instance capability. Unsupported devices qualify only
+the unavailable guard, never positive count drawing.
+
+Twelve bounded quiet invalid-call probes per supported configuration (plus
+shared overlap) precede a valid draw. Runtime alias/subpass ordering, dynamic
+persistent rejection, nonzero firstInstance, sustained resource plateau,
+physical VRAM, performance and MultiMesh integration remain separate gates.
+The receipt validator's adversarial tests use synthetic ledgers and never
+launch Godot; they do not substitute for the deferred GPU fixture.

@@ -1509,7 +1509,7 @@ private:
 	void _draw_list_start(const Rect2i &p_viewport);
 	void _draw_list_end(Rect2i *r_last_viewport = nullptr);
 	bool _draw_list_uniform_set_has_counted_alias(const UniformSet *p_uniform_set) const;
-	Error _draw_list_validate_counted_uniform_sets() const;
+	Error _draw_list_validate_counted_uniform_sets();
 	Error _draw_list_draw_indirect(bool p_use_indices, Buffer *p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride, Buffer *p_count_buffer = nullptr, uint32_t p_count_offset = 0);
 
 public:

@@ -1,0 +1,10 @@
+#version 450
+layout(location=0) flat out uint color_bits;
+void main() {
+    const vec2 vertices[6] = vec2[6](vec2(-1,-1),vec2(1,-1),vec2(1,1),vec2(-1,-1),vec2(1,1),vec2(-1,1));
+    // Geometry ranges identify draws without requiring drawIndirectFirstInstance.
+    uint identity = uint(gl_VertexIndex) / 6u;
+    vec2 center = vec2(-1.0 + (float(identity) + 0.5) * 0.4, 0.0);
+    gl_Position = vec4(center + vertices[gl_VertexIndex % 6] * vec2(0.15,0.70), 0.0, 1.0);
+    color_bits = identity + 1u;
+}
