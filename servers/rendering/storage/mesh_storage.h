@@ -136,6 +136,11 @@ public:
 
 	virtual Error multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset);
 	virtual Error multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors = false);
+	virtual Error multimesh_attach_shared_draw_command_span(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_indirect_command_buffer, int64_t p_command_byte_offset, int64_t p_command_count, int64_t p_command_byte_stride, RSE::MultimeshIndirectSubmissionMode p_submission_mode, bool p_use_shader_motion_vectors = false);
+	virtual int multimesh_get_command_byte_offset(RID p_multimesh) const;
+	virtual int multimesh_get_shared_draw_command_count(RID p_multimesh) const;
+	virtual int multimesh_get_shared_draw_command_stride(RID p_multimesh) const;
+	virtual RSE::MultimeshIndirectSubmissionMode multimesh_get_shared_draw_submission_mode(RID p_multimesh) const;
 	virtual void multimesh_detach_shared_buffers(RID p_multimesh);
 	virtual bool multimesh_is_using_shared_buffers(RID p_multimesh) const;
 	virtual bool multimesh_is_shader_driven(RID p_multimesh) const;

@@ -231,6 +231,11 @@ enum MultimeshTransformFormat {
 	MULTIMESH_TRANSFORM_3D,
 };
 
+enum MultimeshIndirectSubmissionMode {
+	MULTIMESH_INDIRECT_SUBMISSION_LOOP,
+	MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW,
+};
+
 enum MultimeshPhysicsInterpolationQuality {
 	MULTIMESH_INTERP_QUALITY_FAST,
 	MULTIMESH_INTERP_QUALITY_HIGH,

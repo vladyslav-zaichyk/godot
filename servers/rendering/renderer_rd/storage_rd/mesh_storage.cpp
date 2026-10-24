@@ -35,6 +35,7 @@
 #include "servers/rendering/renderer_viewport.h"
 #include "servers/rendering/rendering_server.h"
 #include "servers/rendering/rendering_server_types.h"
+#include "servers/rendering/shared_draw_command_span.h"
 
 using namespace RendererRD;
 
@@ -1634,6 +1635,9 @@ Error MeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transf
 	multimesh->buffer = p_transform_buffer;
 	multimesh->command_buffer = p_indirect_command_buffer;
 	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
+	multimesh->shared_draw_command_count = 1;
+	multimesh->shared_draw_command_stride = 0;
+	multimesh->shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
 	multimesh->instances = p_pool_record_capacity;
 	multimesh->visible_instances = -1;
 	multimesh->indirect = true;
@@ -1696,6 +1700,9 @@ Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_dr
 	multimesh->buffer = RID();
 	multimesh->command_buffer = p_indirect_command_buffer;
 	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
+	multimesh->shared_draw_command_count = 1;
+	multimesh->shared_draw_command_stride = 0;
+	multimesh->shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
 	multimesh->instances = p_draw_slot_capacity;
 	multimesh->visible_instances = -1;
 	multimesh->indirect = true;
@@ -1714,6 +1721,51 @@ Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_dr
 	return OK;
 }
 
+Error MeshStorage::multimesh_attach_shared_draw_command_span(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_indirect_command_buffer, int64_t p_command_byte_offset, int64_t p_command_count, int64_t p_command_byte_stride, RSE::MultimeshIndirectSubmissionMode p_submission_mode, bool p_use_shader_motion_vectors) {
+	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	if (!multimesh) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (OS::get_singleton()->get_current_rendering_method() != "forward_plus" || OS::get_singleton()->get_current_rendering_driver_name() != "vulkan") {
+		return ERR_UNAVAILABLE;
+	}
+	RD *rd = RD::get_singleton();
+	const auto capabilities = rd->get_device_driver()->get_indirect_draw_capabilities();
+	RendererSharedDraw::CommandSpan span;
+	const Error layout_error = RendererSharedDraw::validate_command_span(p_draw_slot_capacity, p_command_byte_offset, p_command_count, p_command_byte_stride, p_submission_mode, capabilities.max_draw_count, span);
+	if (layout_error != OK) {
+		return layout_error;
+	}
+	if (!rd->storage_buffer_is_valid(p_indirect_command_buffer, span.end, true)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	// Reuse every existing topology, ownership, interpolation and history guard.
+	// This call is transactional; the extra span checks above precede all mutation.
+	const Error attach_error = multimesh_attach_shared_draw_buffer(p_multimesh, span.capacity, p_indirect_command_buffer, int(span.offset), p_use_shader_motion_vectors);
+	if (attach_error != OK) {
+		return attach_error;
+	}
+	multimesh->shared_draw_command_count = span.count;
+	multimesh->shared_draw_command_stride = span.stride;
+	multimesh->shared_draw_submission_mode = p_submission_mode;
+	return OK;
+}
+
+int MeshStorage::multimesh_get_shared_draw_command_count(RID p_multimesh) const {
+	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	return multimesh && multimesh->shared_buffers ? int(multimesh->shared_draw_command_count) : 0;
+}
+
+int MeshStorage::multimesh_get_shared_draw_command_stride(RID p_multimesh) const {
+	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	return multimesh && multimesh->shared_buffers ? int(multimesh->shared_draw_command_stride) : 0;
+}
+
+RSE::MultimeshIndirectSubmissionMode MeshStorage::multimesh_get_shared_draw_submission_mode(RID p_multimesh) const {
+	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	return multimesh && multimesh->shared_buffers ? multimesh->shared_draw_submission_mode : RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
+}
+
 void MeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
@@ -1725,6 +1777,9 @@ void MeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 	multimesh->buffer = RID();
 	multimesh->command_buffer = RID();
 	multimesh->command_byte_offset = 0;
+	multimesh->shared_draw_command_count = 0;
+	multimesh->shared_draw_command_stride = 0;
+	multimesh->shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
 	multimesh->shared_buffers = false;
 	multimesh->shader_driven = false;
 	multimesh->shader_motion_vectors = false;
@@ -1754,6 +1809,10 @@ void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RSE
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
 	ERR_FAIL_COND_MSG(multimesh->shared_buffers, "CPU mutation is unavailable for shared MultiMesh buffers.");
+	multimesh->command_byte_offset = 0;
+	multimesh->shared_draw_command_count = 0;
+	multimesh->shared_draw_command_stride = 0;
+	multimesh->shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
 	multimesh->shader_motion_vectors = false;
 
 	if (multimesh->instances == p_instances && multimesh->xform_format == p_transform_format && multimesh->uses_colors == p_use_colors && multimesh->uses_custom_data == p_use_custom_data) {

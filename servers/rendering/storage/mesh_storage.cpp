@@ -77,6 +77,26 @@ Error RendererMeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, 
 	return ERR_UNAVAILABLE;
 }
 
+Error RendererMeshStorage::multimesh_attach_shared_draw_command_span(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_indirect_command_buffer, int64_t p_command_byte_offset, int64_t p_command_count, int64_t p_command_byte_stride, RSE::MultimeshIndirectSubmissionMode p_submission_mode, bool p_use_shader_motion_vectors) {
+	return ERR_UNAVAILABLE;
+}
+
+int RendererMeshStorage::multimesh_get_command_byte_offset(RID p_multimesh) const {
+	return 0;
+}
+
+int RendererMeshStorage::multimesh_get_shared_draw_command_count(RID p_multimesh) const {
+	return 0;
+}
+
+int RendererMeshStorage::multimesh_get_shared_draw_command_stride(RID p_multimesh) const {
+	return 0;
+}
+
+RSE::MultimeshIndirectSubmissionMode RendererMeshStorage::multimesh_get_shared_draw_submission_mode(RID p_multimesh) const {
+	return RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
+}
+
 void RendererMeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 }
 

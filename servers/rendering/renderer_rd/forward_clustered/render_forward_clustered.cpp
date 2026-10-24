@@ -643,7 +643,23 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 				}
 				RD::get_singleton()->draw_list_draw(draw_list, false, mesh_storage->mesh_surface_get_vertex_count(mesh_surface), instance_count * 6);
 			} else if (indirect) {
-				RD::get_singleton()->draw_list_draw_indirect(draw_list, index_array_rd.is_valid(), mesh_storage->_multimesh_get_command_buffer_rd_rid(surf->owner->data->base), mesh_storage->multimesh_get_command_byte_offset(surf->owner->data->base) + surf->surface_index * sizeof(uint32_t) * mesh_storage->INDIRECT_MULTIMESH_COMMAND_STRIDE, 1, 0);
+				const RID multimesh = surf->owner->data->base;
+				const RID commands = mesh_storage->_multimesh_get_command_buffer_rd_rid(multimesh);
+				const uint32_t offset = uint32_t(mesh_storage->multimesh_get_command_byte_offset(multimesh));
+				if (surf->owner->shader_driven_instances) {
+					const uint32_t count = uint32_t(mesh_storage->multimesh_get_shared_draw_command_count(multimesh));
+					const uint32_t stride = uint32_t(mesh_storage->multimesh_get_shared_draw_command_stride(multimesh));
+					if (mesh_storage->multimesh_get_shared_draw_submission_mode(multimesh) == RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP) {
+						// Attachment proves every offset fits uint32. Same owner, bindings and push constants.
+						for (uint32_t command = 0; command < count; command++) {
+							RD::get_singleton()->draw_list_draw_indirect(draw_list, true, commands, offset + command * stride, 1, 0);
+						}
+					} else {
+						RD::get_singleton()->draw_list_draw_indirect(draw_list, true, commands, offset, count, stride);
+					}
+				} else {
+					RD::get_singleton()->draw_list_draw_indirect(draw_list, index_array_rd.is_valid(), commands, offset + surf->surface_index * sizeof(uint32_t) * mesh_storage->INDIRECT_MULTIMESH_COMMAND_STRIDE, 1, 0);
+				}
 			} else {
 				RD::get_singleton()->draw_list_draw(draw_list, index_array_rd.is_valid(), instance_count);
 			}
