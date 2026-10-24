@@ -1,9 +1,20 @@
 # Native E13a ordering and publication stand
 
-Status: authored source; new native editor/SDK compilation and GPU execution are
-pending. This directory does not change or qualify the separate `../fixture/`
-proxy reference. Never substitute the older E12b editor or infer a native pass
-from a successful managed compile or synthetic receipt test.
+Status: the corrected no-GI orthographic stand passed on native4010f61:
+14 GPU views /821 checks,99 dispatches,88 barriers, zero false negatives or
+diagnostics. Original sealed payloads remain unchanged. This source includes
+the tested GI fix. Every new perspective editor still requires these14controls
+to be rerun on its own exact binary/SDK before independent perspective/VAT
+qualification. Compilation and synthetic receipt tests are separate evidence.
+The separate `../fixture/` proxy reference remains historical and unchanged.
+
+The E13b native extension admits ordinary centered perspective, while retaining
+all effect exclusions and the same depth -> compute -> remaining depth -> color
+ordering. It does not convert this fixed orthographic producer into a general
+3D culler. The integration owner supplies P01-P08: eight-corner all-animation
+bounds, near-plane uncertainty, current camera/depth, projection/extent changes,
+uncertified proofs and death/refill. Start with the existing certified whole
+animation envelope. TAA/E8 and eight LOD owners follow separate gates.
 
 The stand uses one actual 64x32 orthographic SubViewport, Vulkan Forward+, no
 MSAA/TAA/GI/shadows and public Bilinear scaling at scale1 (the viewport normalizes
@@ -37,7 +48,9 @@ actual render-local selection from merely correct producer bytes/outcome flags.
 Only AFTER the callback and native resumed render, terminal GPU reads capture
 the full depth/min hierarchy, ID bank, all five indexed command words and epoch
 stamps; a viewport Image supplies22 numerical pixel probes per view and hashes.
-No image files or visual screenshots are written. The independent Python oracle
+No image files or visual screenshots are written. Ordinary mesh owners explicitly
+disable and check GI before entering the tree: MeshInstance3D otherwise defaults
+to Static GI, which is ineligible for this native early-depth scope. The independent Python oracle
 checks actual selected wall depth, full-resolution conservative visibility,
 zero false negatives, at least one blocked ID removed, immutable fallback,
 guards/uniqueness/capacity, GPU-overflow fallback, pixel colors and equal normal
