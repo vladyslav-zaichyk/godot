@@ -228,6 +228,7 @@ private:
 		uint32_t color_pass_flags = 0;
 		bool no_gi = false;
 		bool motion_vectors_required = false; // Demand of this view, including depth passes.
+		bool allow_counted_instances = false; // Explicit main single-view opaque/depth purpose only.
 		uint32_t view_count = 1;
 		RID render_pass_uniform_set;
 		bool force_wireframe = false;
@@ -574,6 +575,8 @@ private:
 		bool shader_driven_material_warning = false;
 		bool shader_driven_motion_warning = false;
 		bool shader_driven_mesh_warning = false;
+		bool counted_pass_warning = false;
+		bool indirect_binding_warning = false;
 		uint32_t instance_count = 0;
 		uint32_t trail_steps = 1;
 		bool can_sdfgi = false;

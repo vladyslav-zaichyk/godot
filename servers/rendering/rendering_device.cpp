@@ -5784,27 +5784,35 @@ void RenderingDevice::draw_list_bind_render_pipeline(DrawListID p_list, RID p_re
 }
 
 void RenderingDevice::draw_list_bind_uniform_set(DrawListID p_list, RID p_uniform_set, uint32_t p_index) {
-	ERR_RENDER_THREAD_GUARD();
+	_draw_list_bind_uniform_set(p_list, p_uniform_set, p_index, true);
+}
+
+Error RenderingDevice::draw_list_bind_uniform_set_checked(DrawListID p_list, RID p_uniform_set, uint32_t p_index) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+	if (p_list != (int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT) || p_index >= MAX_UNIFORM_SETS || p_index >= driver->limit_get(LIMIT_MAX_BOUND_UNIFORM_SETS)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	return _draw_list_bind_uniform_set(p_list, p_uniform_set, p_index, false);
+}
+
+Error RenderingDevice::_draw_list_bind_uniform_set(DrawListID p_list, RID p_uniform_set, uint32_t p_index, bool p_report_alias_errors) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
 
 #ifdef DEBUG_ENABLED
-	ERR_FAIL_COND_MSG(p_index >= driver->limit_get(LIMIT_MAX_BOUND_UNIFORM_SETS) || p_index >= MAX_UNIFORM_SETS,
+	ERR_FAIL_COND_V_MSG(p_index >= driver->limit_get(LIMIT_MAX_BOUND_UNIFORM_SETS) || p_index >= MAX_UNIFORM_SETS, ERR_INVALID_PARAMETER,
 			"Attempting to bind a descriptor set (" + itos(p_index) + ") greater than what the hardware supports (" + itos(driver->limit_get(LIMIT_MAX_BOUND_UNIFORM_SETS)) + ").");
 #endif
 
-	ERR_FAIL_COND(!draw_list.active);
+	ERR_FAIL_COND_V(!draw_list.active, ERR_INVALID_PARAMETER);
 
 	const UniformSet *uniform_set = uniform_set_owner.get_or_null(p_uniform_set);
-	ERR_FAIL_NULL(uniform_set);
-	ERR_FAIL_COND_MSG(_draw_list_uniform_set_has_counted_alias(uniform_set), "A counted indirect bank cannot be bound as a shader resource in the same draw list.");
-
-	if (p_index > draw_list.state.set_count) {
-		draw_list.state.set_count = p_index;
+	ERR_FAIL_NULL_V(uniform_set, ERR_INVALID_PARAMETER);
+	if (_draw_list_uniform_set_has_counted_alias(uniform_set)) {
+		if (p_report_alias_errors) {
+			ERR_PRINT("A counted indirect bank cannot be bound as a shader resource in the same draw list.");
+		}
+		return ERR_INVALID_PARAMETER;
 	}
-
-	draw_list.state.sets[p_index].uniform_set_driver_id = uniform_set->driver_id; // Update set pointer.
-	draw_list.state.sets[p_index].bound = false; // Needs rebind.
-	draw_list.state.sets[p_index].uniform_set_format = uniform_set->format;
-	draw_list.state.sets[p_index].uniform_set = p_uniform_set;
 
 #ifdef DEBUG_ENABLED
 	{ // Validate that textures bound are not attached as framebuffer bindings.
@@ -5814,29 +5822,56 @@ void RenderingDevice::draw_list_bind_uniform_set(DrawListID p_list, RID p_unifor
 		const RID *bound_ptr = draw_list_bound_textures.ptr();
 		for (uint32_t i = 0; i < attachable_count; i++) {
 			for (uint32_t j = 0; j < bound_count; j++) {
-				ERR_FAIL_COND_MSG(attachable_ptr[i].texture == bound_ptr[j],
+				ERR_FAIL_COND_V_MSG(attachable_ptr[i].texture == bound_ptr[j], ERR_INVALID_PARAMETER,
 						"Attempted to use the same texture in framebuffer attachment and a uniform (set: " + itos(p_index) + ", binding: " + itos(attachable_ptr[i].bind) + "), this is not allowed.");
 			}
 		}
 	}
 #endif
+	// Complete every fallible check before changing pending descriptor state.
+	if (p_index > draw_list.state.set_count) {
+		draw_list.state.set_count = p_index;
+	}
+
+	draw_list.state.sets[p_index].uniform_set_driver_id = uniform_set->driver_id; // Update set pointer.
+	draw_list.state.sets[p_index].bound = false; // Needs rebind.
+	draw_list.state.sets[p_index].uniform_set_format = uniform_set->format;
+	draw_list.state.sets[p_index].uniform_set = p_uniform_set;
+	return OK;
 }
 
 void RenderingDevice::draw_list_bind_vertex_array(DrawListID p_list, RID p_vertex_array) {
-	ERR_RENDER_THREAD_GUARD();
+	_draw_list_bind_vertex_array(p_list, p_vertex_array, true);
+}
 
-	ERR_FAIL_COND(!draw_list.active);
+Error RenderingDevice::draw_list_bind_vertex_array_checked(DrawListID p_list, RID p_vertex_array) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+	if (p_list != (int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	return _draw_list_bind_vertex_array(p_list, p_vertex_array, false);
+}
+
+Error RenderingDevice::_draw_list_bind_vertex_array(DrawListID p_list, RID p_vertex_array, bool p_report_alias_errors) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+
+	ERR_FAIL_COND_V(!draw_list.active, ERR_INVALID_PARAMETER);
 
 	VertexArray *vertex_array = vertex_array_owner.get_or_null(p_vertex_array);
-	ERR_FAIL_NULL(vertex_array);
+	ERR_FAIL_NULL_V(vertex_array, ERR_INVALID_PARAMETER);
 	if (!draw_list.counted_indirect_trackers.is_empty()) {
 		for (RDG::ResourceTracker *tracker : vertex_array->draw_trackers) {
-			ERR_FAIL_COND_MSG(draw_list.counted_indirect_trackers.has(tracker), "A counted indirect bank cannot be bound as vertex input in the same draw list.");
+			if (draw_list.counted_indirect_trackers.has(tracker)) {
+				if (p_report_alias_errors) {
+					ERR_PRINT("A counted indirect bank cannot be bound as vertex input in the same draw list.");
+				}
+				return ERR_INVALID_PARAMETER;
+			}
 		}
 	}
 
 	if (draw_list.state.vertex_array == p_vertex_array) {
-		return; // Already set.
+		return OK; // Already set.
 	}
 
 	_check_transfer_worker_vertex_array(vertex_array);
@@ -5854,6 +5889,7 @@ void RenderingDevice::draw_list_bind_vertex_array(DrawListID p_list, RID p_verte
 	for (int i = 0; i < vertex_array->draw_trackers.size(); i++) {
 		draw_graph.add_draw_list_usage(vertex_array->draw_trackers[i], RDG::RESOURCE_USAGE_VERTEX_BUFFER_READ);
 	}
+	return OK;
 }
 
 void RenderingDevice::draw_list_bind_vertex_buffers_format(DrawListID p_list, VertexFormatID p_vertex_format, uint32_t p_vertex_count, const Span<RID> &p_vertex_buffers, const Span<uint64_t> &p_offsets) {
@@ -5964,16 +6000,33 @@ void RenderingDevice::draw_list_bind_vertex_buffers_format(DrawListID p_list, Ve
 }
 
 void RenderingDevice::draw_list_bind_index_array(DrawListID p_list, RID p_index_array) {
-	ERR_RENDER_THREAD_GUARD();
+	_draw_list_bind_index_array(p_list, p_index_array, true);
+}
 
-	ERR_FAIL_COND(!draw_list.active);
+Error RenderingDevice::draw_list_bind_index_array_checked(DrawListID p_list, RID p_index_array) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+	if (p_list != (int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	return _draw_list_bind_index_array(p_list, p_index_array, false);
+}
+
+Error RenderingDevice::_draw_list_bind_index_array(DrawListID p_list, RID p_index_array, bool p_report_alias_errors) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+
+	ERR_FAIL_COND_V(!draw_list.active, ERR_INVALID_PARAMETER);
 
 	IndexArray *index_array = index_array_owner.get_or_null(p_index_array);
-	ERR_FAIL_NULL(index_array);
-	ERR_FAIL_COND_MSG(draw_list.counted_indirect_trackers.has(index_array->draw_tracker), "A counted indirect bank cannot be bound as index input in the same draw list.");
+	ERR_FAIL_NULL_V(index_array, ERR_INVALID_PARAMETER);
+	if (draw_list.counted_indirect_trackers.has(index_array->draw_tracker)) {
+		if (p_report_alias_errors) {
+			ERR_PRINT("A counted indirect bank cannot be bound as index input in the same draw list.");
+		}
+		return ERR_INVALID_PARAMETER;
+	}
 
 	if (draw_list.state.index_array == p_index_array) {
-		return; // Already set.
+		return OK; // Already set.
 	}
 
 	_check_transfer_worker_index_array(index_array);
@@ -5990,6 +6043,7 @@ void RenderingDevice::draw_list_bind_index_array(DrawListID p_list, RID p_index_
 	if (index_array->draw_tracker != nullptr) {
 		draw_graph.add_draw_list_usage(index_array->draw_tracker, RDG::RESOURCE_USAGE_INDEX_BUFFER_READ);
 	}
+	return OK;
 }
 
 void RenderingDevice::draw_list_set_line_width(DrawListID p_list, float p_width) {
@@ -6228,13 +6282,10 @@ Error RenderingDevice::_draw_list_validate_counted_uniform_sets() {
 	return OK;
 }
 
-Error RenderingDevice::draw_list_draw_indirect_count(DrawListID p_list, bool p_use_indices, RID p_buffer, int64_t p_offset, RID p_count_buffer, int64_t p_count_offset, int64_t p_max_draw_count, int64_t p_stride) {
+Error RenderingDevice::validate_draw_indirect_count_buffers(bool p_use_indices, RID p_buffer, int64_t p_offset, RID p_count_buffer, int64_t p_count_offset, int64_t p_max_draw_count, int64_t p_stride) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
-	// This checked API reports expected metadata/capability rejection by return
-	// value. Do not require callers to suppress global diagnostics to probe it.
-	if (!draw_list.active || p_list != (int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT)) {
-		return ERR_INVALID_PARAMETER;
-	}
+	// Attachment and submission share metadata validation. This operation does
+	// not depend on an active draw list, inspect GPU contents or change state.
 	if (!driver->has_indirect_draw_count()) {
 		return ERR_UNAVAILABLE;
 	}
@@ -6242,13 +6293,26 @@ Error RenderingDevice::draw_list_draw_indirect_count(DrawListID p_list, bool p_u
 	Buffer *count_buffer = storage_buffer_owner.get_or_null(p_count_buffer);
 	if (buffer == nullptr || count_buffer == nullptr ||
 			buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT) || count_buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT) ||
+			!buffer->usage.has_flag(RDD::BUFFER_USAGE_STORAGE_BIT) || !count_buffer->usage.has_flag(RDD::BUFFER_USAGE_STORAGE_BIT) ||
 			!buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT) || !count_buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT)) {
 		return ERR_INVALID_PARAMETER;
 	}
-	const Error range_error = RenderingDeviceIndirect::validate_count_draw_range(buffer->size, count_buffer->size, p_use_indices, p_offset, p_count_offset, p_max_draw_count, p_stride, buffer == count_buffer, driver->get_indirect_draw_count_limit());
-	if (range_error != OK) {
-		return range_error;
+	return RenderingDeviceIndirect::validate_count_draw_range(buffer->size, count_buffer->size, p_use_indices, p_offset, p_count_offset, p_max_draw_count, p_stride, buffer == count_buffer, driver->get_indirect_draw_count_limit());
+}
+
+Error RenderingDevice::draw_list_draw_indirect_count(DrawListID p_list, bool p_use_indices, RID p_buffer, int64_t p_offset, RID p_count_buffer, int64_t p_count_offset, int64_t p_max_draw_count, int64_t p_stride) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+	// This checked API reports expected metadata/capability rejection by return
+	// value. Do not require callers to suppress global diagnostics to probe it.
+	if (!draw_list.active || p_list != (int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT)) {
+		return ERR_INVALID_PARAMETER;
 	}
+	const Error buffer_error = validate_draw_indirect_count_buffers(p_use_indices, p_buffer, p_offset, p_count_buffer, p_count_offset, p_max_draw_count, p_stride);
+	if (buffer_error != OK) {
+		return buffer_error;
+	}
+	Buffer *buffer = storage_buffer_owner.get_or_null(p_buffer);
+	Buffer *count_buffer = storage_buffer_owner.get_or_null(p_count_buffer);
 	if (!draw_graph.is_draw_list_usage_compatible(buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ) || !draw_graph.is_draw_list_usage_compatible(count_buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ) ||
 			!render_pipeline_owner.owns(draw_list.state.pipeline) || (p_use_indices && !index_array_owner.owns(draw_list.state.index_array))) {
 		return ERR_INVALID_PARAMETER;
@@ -6310,10 +6374,18 @@ Error RenderingDevice::_draw_list_draw_indirect(bool p_use_indices, Buffer *p_bu
 		if (draw_list.state.sets[i].pipeline_expected_format != 0 && (!draw_list.state.sets[i].bound || p_count_buffer != nullptr || !draw_list.counted_indirect_trackers.is_empty())) {
 			uniform_sets[i] = uniform_set_owner.get_or_null(draw_list.state.sets[i].uniform_set);
 			ERR_FAIL_NULL_V(uniform_sets[i], ERR_INVALID_PARAMETER);
-			ERR_FAIL_COND_V_MSG(_draw_list_uniform_set_has_counted_alias(uniform_sets[i]), ERR_INVALID_PARAMETER, "A counted indirect bank cannot be a shader resource in the same draw list.");
+			const bool counted_alias = _draw_list_uniform_set_has_counted_alias(uniform_sets[i]);
+			if (p_count_buffer != nullptr && counted_alias) {
+				return ERR_INVALID_PARAMETER;
+			}
+			// Preserve ordinary public draw diagnostics; native counted consumers
+			// own their bounded diagnostic after this checked operation returns.
+			ERR_FAIL_COND_V_MSG(counted_alias, ERR_INVALID_PARAMETER, "A counted indirect bank cannot be a shader resource in the same draw list.");
 			if (p_count_buffer != nullptr) {
 				for (RDG::ResourceTracker *tracker : uniform_sets[i]->draw_trackers) {
-					ERR_FAIL_COND_V_MSG(tracker == p_buffer->draw_tracker || tracker == p_count_buffer->draw_tracker, ERR_INVALID_PARAMETER, "Counted indirect commands and counters cannot alias pending shader resources.");
+					if (tracker == p_buffer->draw_tracker || tracker == p_count_buffer->draw_tracker) {
+						return ERR_INVALID_PARAMETER;
+					}
 				}
 			}
 		}

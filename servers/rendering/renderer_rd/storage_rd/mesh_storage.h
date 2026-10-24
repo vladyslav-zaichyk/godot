@@ -263,6 +263,8 @@ private:
 		uint32_t shared_draw_command_count = 0;
 		uint32_t shared_draw_command_stride = 0;
 		RSE::MultimeshIndirectSubmissionMode shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
+		RID shared_draw_count_buffer; // Borrowed counter bank; never freed or reset by the view.
+		uint32_t shared_draw_count_byte_offset = 0;
 
 		bool dirty = false;
 		MultiMesh *dirty_list = nullptr;
@@ -277,6 +279,8 @@ private:
 	MultiMesh *multimesh_dirty_list = nullptr;
 
 	void _multimesh_clear_shared_uniform_sets(MultiMesh *p_multimesh);
+	Error _multimesh_validate_shared_draw_buffer(MultiMesh *p_multimesh, int p_capacity, RID p_commands, int p_offset, bool p_shader_motion_vectors);
+	void _multimesh_commit_shared_view(MultiMesh *p_multimesh, int p_capacity, RID p_transforms, RID p_commands, uint32_t p_offset, uint32_t p_count, uint32_t p_stride, RSE::MultimeshIndirectSubmissionMode p_mode, bool p_shader_driven, bool p_shader_motion_vectors, RID p_count_buffer = RID(), uint32_t p_count_offset = 0);
 	_FORCE_INLINE_ void _multimesh_make_local(MultiMesh *multimesh) const;
 	_FORCE_INLINE_ void _multimesh_enable_motion_vectors(MultiMesh *multimesh);
 	_FORCE_INLINE_ void _multimesh_update_motion_vectors_data_cache(MultiMesh *multimesh);
@@ -675,6 +679,9 @@ public:
 	virtual Error multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) override;
 	virtual Error multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors) override;
 	virtual Error multimesh_attach_shared_draw_command_span(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_indirect_command_buffer, int64_t p_command_byte_offset, int64_t p_command_count, int64_t p_command_byte_stride, RSE::MultimeshIndirectSubmissionMode p_submission_mode, bool p_use_shader_motion_vectors) override;
+	virtual Error multimesh_attach_shared_draw_command_span_count(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_commands, int64_t p_command_byte_offset, RID p_count_buffer, int64_t p_count_byte_offset, int64_t p_maximum_count, int64_t p_command_byte_stride, bool p_use_shader_motion_vectors) override;
+	virtual RID multimesh_get_shared_draw_count_buffer_rd_rid(RID p_multimesh) const override;
+	virtual int multimesh_get_shared_draw_count_byte_offset(RID p_multimesh) const override;
 	virtual int multimesh_get_shared_draw_command_count(RID p_multimesh) const override;
 	virtual int multimesh_get_shared_draw_command_stride(RID p_multimesh) const override;
 	virtual RSE::MultimeshIndirectSubmissionMode multimesh_get_shared_draw_submission_mode(RID p_multimesh) const override;

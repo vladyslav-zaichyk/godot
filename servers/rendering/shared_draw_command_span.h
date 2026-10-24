@@ -72,4 +72,35 @@ inline Error validate_command_span(int64_t p_capacity, int64_t p_offset, int64_t
 	return OK;
 }
 
+struct CountedCommandSpan {
+	CommandSpan commands;
+	uint32_t count_offset = 0;
+	uint64_t count_end = 0;
+};
+
+// The counted attachment has its own capability even for maximum one. Reuse
+// LOOP only for E9's numeric layout rules, never as an execution fallback.
+inline Error validate_counted_command_span(int64_t p_capacity, int64_t p_offset, int64_t p_maximum, int64_t p_stride, int64_t p_count_offset, bool p_same_buffer, uint32_t p_count_limit, CountedCommandSpan &r_span) {
+	CommandSpan commands;
+	const Error layout_error = validate_command_span(p_capacity, p_offset, p_maximum, p_stride, RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP, 0, commands);
+	if (layout_error != OK) {
+		return layout_error;
+	}
+	if (p_count_offset < 0 || p_count_offset > std::numeric_limits<int32_t>::max() || (p_count_offset % 4) != 0) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const uint64_t count_end = uint64_t(p_count_offset) + 4;
+	if (p_same_buffer && uint64_t(p_count_offset) < commands.end && uint64_t(commands.offset) < count_end) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (p_count_limit == 0 || commands.count > p_count_limit) {
+		return ERR_UNAVAILABLE;
+	}
+	// Publish only after every check, preserving the caller's old layout on error.
+	r_span.commands = commands;
+	r_span.count_offset = uint32_t(p_count_offset);
+	r_span.count_end = count_end;
+	return OK;
+}
+
 } // namespace RendererSharedDraw

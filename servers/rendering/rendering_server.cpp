@@ -2479,6 +2479,9 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("multimesh_attach_shared_buffers", "multimesh", "transform_buffer", "pool_record_capacity", "indirect_command_buffer", "command_byte_offset"), &RenderingServer::multimesh_attach_shared_buffers);
 	ClassDB::bind_method(D_METHOD("multimesh_attach_shared_draw_buffer", "multimesh", "draw_slot_capacity", "indirect_command_buffer", "command_byte_offset", "use_shader_motion_vectors"), &RenderingServer::multimesh_attach_shared_draw_buffer, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("multimesh_attach_shared_draw_command_span", "multimesh", "draw_slot_capacity", "indirect_command_buffer", "command_byte_offset", "command_count", "command_byte_stride", "submission_mode", "use_shader_motion_vectors"), &RenderingServer::multimesh_attach_shared_draw_command_span, DEFVAL(false));
+	ClassDB::bind_method(D_METHOD("multimesh_attach_shared_draw_command_span_count", "multimesh", "draw_slot_capacity", "commands", "command_byte_offset", "count_buffer", "count_byte_offset", "maximum_count", "command_byte_stride", "use_shader_motion_vectors"), &RenderingServer::multimesh_attach_shared_draw_command_span_count, DEFVAL(false));
+	ClassDB::bind_method(D_METHOD("multimesh_get_shared_draw_count_buffer_rd_rid", "multimesh"), &RenderingServer::multimesh_get_shared_draw_count_buffer_rd_rid);
+	ClassDB::bind_method(D_METHOD("multimesh_get_shared_draw_count_byte_offset", "multimesh"), &RenderingServer::multimesh_get_shared_draw_count_byte_offset);
 	ClassDB::bind_method(D_METHOD("multimesh_get_command_byte_offset", "multimesh"), &RenderingServer::multimesh_get_command_byte_offset);
 	ClassDB::bind_method(D_METHOD("multimesh_get_shared_draw_command_count", "multimesh"), &RenderingServer::multimesh_get_shared_draw_command_count);
 	ClassDB::bind_method(D_METHOD("multimesh_get_shared_draw_command_stride", "multimesh"), &RenderingServer::multimesh_get_shared_draw_command_stride);
@@ -2518,6 +2521,7 @@ void RenderingServer::_bind_methods() {
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_TRANSFORM_3D);
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP);
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW);
+	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT);
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INTERP_QUALITY_FAST);
 	BIND_ENUM_CONSTANT(RSE::MULTIMESH_INTERP_QUALITY_HIGH);
 
