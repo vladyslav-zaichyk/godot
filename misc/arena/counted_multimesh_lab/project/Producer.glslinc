@@ -1,0 +1,45 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0,std430) buffer Ids { uint ids[]; };
+layout(set=0,binding=1,std430) buffer Commands { uint commands[]; };
+layout(set=0,binding=2,std430) buffer Counters { uint counters[]; };
+layout(push_constant,std430) uniform Parameters {
+    uint stage; uint phase; uint maximum; uint stride_words;
+    uint span_words; uint unused0; uint unused1; uint unused2;
+} pc;
+
+uint admitted() {
+    if (pc.phase == 1u || pc.phase == 5u) return 0u;
+    if (pc.phase == 3u || pc.phase == 6u) return 1u;
+    if (pc.phase == 2u) return min(2u, pc.maximum);
+    return pc.maximum;
+}
+
+uint source_at(uint record, uint count) {
+    if (record >= count) return record;
+    if (pc.phase == 4u) return pc.maximum - 1u - record;
+    if (pc.phase == 3u || pc.phase == 6u) return pc.maximum - 1u;
+    if (pc.phase == 2u && record == 1u) return pc.maximum - 1u;
+    return record;
+}
+
+void main() {
+    uint owner=gl_GlobalInvocationID.x;
+    if (owner >= 2u) return;
+    uint counter=1u+owner*2u, count=admitted();
+    if (pc.stage == 0u) { counters[counter]=0u; return; }
+    if (pc.stage == 2u) { counters[counter]=count; return; }
+    // Each owner writes bounded disjoint regions; no append/reservation race.
+    for (uint slot=0u;slot<16u;slot++) ids[owner*16u+slot]=0xffffffffu;
+    for (uint source=0u;source<=pc.maximum;source++) ids[owner*16u+1u+source*3u]=owner*5u+source;
+    for (uint record=0u;record<=pc.maximum;record++) {
+        uint source=source_at(record,count);
+        uint word=8u+owner*pc.span_words+record*pc.stride_words;
+        bool nonempty=record<count || record==pc.maximum || pc.phase>=5u;
+        commands[word]=6u;
+        commands[word+1u]=nonempty ? 1u : 0u;
+        commands[word+2u]=(source&1u)*6u;
+        commands[word+3u]=(source&1u)*4u;
+        commands[word+4u]=1u+source*3u;
+    }
+}
