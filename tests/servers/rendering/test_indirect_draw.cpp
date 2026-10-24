@@ -39,11 +39,52 @@ namespace TestIndirectDraw {
 using RenderingDeviceIndirect::Capabilities;
 using RenderingDeviceIndirect::validate_draw_range;
 using RenderingDeviceIndirect::validate_count_draw_range;
+using RenderingDeviceIndirect::validate_dispatch_range;
 
 static constexpr Capabilities VULKAN = { 1024, Capabilities::STRIDE_VULKAN };
 static constexpr Capabilities VULKAN_SINGLE = { 1, Capabilities::STRIDE_VULKAN };
 static constexpr Capabilities PACKED = { 0, Capabilities::STRIDE_PACKED };
 static constexpr Capabilities REQUESTED = {};
+
+TEST_CASE("[Rendering][IndirectDraw][IndirectDispatch] A complete twelve byte command and its prefix must fit") {
+	CHECK(validate_dispatch_range(12, 0) == OK);
+	CHECK(validate_dispatch_range(16, 4) == OK);
+	CHECK(validate_dispatch_range(24, 12) == OK);
+	CHECK(validate_dispatch_range(0, 0) == ERR_INVALID_PARAMETER);
+	CHECK(validate_dispatch_range(11, 0) == ERR_INVALID_PARAMETER);
+	CHECK(validate_dispatch_range(15, 4) == ERR_INVALID_PARAMETER);
+	CHECK(validate_dispatch_range(16, 8) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw][IndirectDispatch] Every command offset requires four byte alignment") {
+	for (uint32_t prefix : { 0u, 4u, 32u, 1024u }) {
+		CHECK(validate_dispatch_range(2048, prefix) == OK);
+		for (uint32_t delta : { 1u, 2u, 3u }) {
+			CHECK(validate_dispatch_range(2048, prefix + delta) == ERR_INVALID_PARAMETER);
+		}
+	}
+}
+
+TEST_CASE("[Rendering][IndirectDraw][IndirectDispatch] Offset addition cannot wrap at the uint32 boundary") {
+	// The old uint32_t addition wrapped this aligned command end to eight.
+	CHECK(validate_dispatch_range(8, UINT32_MAX - 3) == ERR_INVALID_PARAMETER);
+	CHECK(validate_dispatch_range(UINT32_MAX, UINT32_MAX - 3) == ERR_INVALID_PARAMETER);
+	CHECK(validate_dispatch_range(UINT32_MAX, UINT32_MAX - 11) == ERR_INVALID_PARAMETER);
+	CHECK(validate_dispatch_range(UINT32_MAX, UINT32_MAX - 15) == OK);
+	const uint64_t exact_end = uint64_t(UINT32_MAX - 3) + 12;
+	CHECK(validate_dispatch_range(exact_end, UINT32_MAX - 3) == OK);
+	CHECK(validate_dispatch_range(exact_end - 1, UINT32_MAX - 3) == ERR_INVALID_PARAMETER);
+	CHECK(validate_dispatch_range(UINT64_MAX, UINT32_MAX) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw][IndirectDispatch] Small spans agree with an independent subtraction oracle") {
+	for (uint32_t size = 0; size <= 96; size++) {
+		for (uint32_t offset = 0; offset <= 128; offset++) {
+			const bool expected = offset % 4 == 0 && offset <= size && size - offset >= 12;
+			CHECK((validate_dispatch_range(size, offset) == OK) == expected);
+		}
+	}
+}
 
 TEST_CASE("[Rendering][IndirectDraw] Every call requires aligned command offset") {
 	for (bool indexed : { false, true }) {

@@ -36,6 +36,15 @@
 
 namespace RenderingDeviceIndirect {
 
+// VkDispatchIndirectCommand is three uint32_t group counts. Validate only its
+// CPU-visible range here; the GPU-owned group counts remain the caller's job.
+inline Error validate_dispatch_range(uint64_t p_buffer_size, uint32_t p_offset) {
+	if ((p_offset % 4) != 0) {
+		return ERR_INVALID_PARAMETER;
+	}
+	return uint64_t(p_offset) + 12 <= p_buffer_size ? OK : ERR_INVALID_PARAMETER;
+}
+
 // Internal driver policy. Unknown limits must not disable existing backend paths.
 struct Capabilities {
 	enum StrideMode {

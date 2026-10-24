@@ -7147,7 +7147,8 @@ void RenderingDevice::compute_list_dispatch_indirect(ComputeListID p_list, RID p
 
 	ERR_FAIL_COND_MSG(!buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT), "Buffer provided was not created to do indirect dispatch.");
 
-	ERR_FAIL_COND_MSG(p_offset + 12 > buffer->size, "Offset provided (+12) is past the end of buffer.");
+	ERR_FAIL_COND_MSG(RenderingDeviceIndirect::validate_dispatch_range(buffer->size, p_offset) != OK,
+			"Indirect dispatch offset must be four-byte aligned and its twelve-byte command must fit in the buffer.");
 
 #ifdef DEBUG_ENABLED
 
