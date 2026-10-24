@@ -31,6 +31,7 @@
 #pragma once
 
 #include "core/object/ref_counted.h"
+#include "servers/rendering/gpu_occlusion_prepass.h"
 #include "servers/rendering/rendering_server_enums.h"
 
 class RenderSceneBuffersConfiguration : public RefCounted {
@@ -100,12 +101,17 @@ public:
 class RenderSceneBuffers : public RefCounted {
 	GDCLASS(RenderSceneBuffers, RefCounted);
 
+	Ref<GpuOcclusionPrepassState> gpu_occlusion_prepass_state;
+
 protected:
 	static void _bind_methods();
 
 public:
 	RenderSceneBuffers() {}
 	virtual ~RenderSceneBuffers() {}
+
+	void set_gpu_occlusion_prepass_state(const Ref<GpuOcclusionPrepassState> &p_state) { gpu_occlusion_prepass_state = p_state; }
+	Ref<GpuOcclusionPrepassState> get_gpu_occlusion_prepass_state() const { return gpu_occlusion_prepass_state; }
 
 	virtual void configure(const RenderSceneBuffersConfiguration *p_config) = 0;
 

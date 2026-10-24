@@ -1022,6 +1022,7 @@ public:
 	RenderingLightCuller *light_culler = nullptr;
 
 	virtual RID instance_allocate();
+	RenderGeometryInstance *instance_get_render_geometry_instance(RID p_instance, RID p_scenario = RID()) const;
 	virtual void instance_initialize(RID p_rid);
 
 	virtual void instance_set_base(RID p_instance, RID p_base);

@@ -1,0 +1,22 @@
+config_version=5
+
+[application]
+config/name="Native Occlusion Ordering Contract"
+run/main_scene="res://Main.tscn"
+run/flush_stdout_on_print=true
+
+[display]
+window/size/viewport_width=96
+window/size/viewport_height=64
+window/size/window_width_override=192
+window/size/window_height_override=128
+window/vsync/vsync_mode=0
+
+[dotnet]
+project/assembly_name="OcclusionNativeLab"
+
+[rendering]
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="forward_plus"
+anti_aliasing/quality/use_taa=false
+environment/defaults/default_clear_color=Color(0,0,0,1)

@@ -822,6 +822,11 @@ public:
 	FUNC2(viewport_set_use_debanding, RID, bool)
 	FUNC2(viewport_set_force_motion_vectors, RID, bool)
 	FUNC2(viewport_set_use_occlusion_culling, RID, bool)
+	FUNC3R(Error, viewport_configure_gpu_occlusion_prepass, RID, uint32_t, const Callable &)
+	FUNC7R(Error, viewport_register_gpu_occlusion_consumer, RID, RID, RID, int64_t, RID, int64_t, int64_t)
+	FUNC2R(Error, viewport_unregister_gpu_occlusion_consumer, RID, RID)
+	FUNC1R(Error, viewport_clear_gpu_occlusion_prepass, RID)
+	FUNC1RC(Dictionary, viewport_get_gpu_occlusion_prepass_outcome, RID)
 	FUNC1(viewport_set_occlusion_rays_per_thread, int)
 	FUNC1(viewport_set_occlusion_culling_build_quality, RSE::ViewportOcclusionCullingBuildQuality)
 	FUNC2(viewport_set_mesh_lod_threshold, RID, float)
@@ -1217,6 +1222,9 @@ public:
 
 	virtual void free_rid(RID p_rid) override {
 		if (Thread::get_caller_id() == server_thread) {
+			if (RSG::viewport->reject_gpu_occlusion_free()) {
+				return;
+			}
 			command_queue.flush_if_pending();
 			_free(p_rid);
 		} else {

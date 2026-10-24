@@ -80,6 +80,8 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	unshaded = false;
 	uses_vertex = false;
 	uses_position = false;
+	writes_fragment_depth = false;
+	skips_vertex_transform = false;
 	uses_sss = false;
 	uses_transmittance = false;
 	uses_time = false;
@@ -128,6 +130,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	actions.render_mode_flags["wireframe"] = &wireframe;
 	actions.render_mode_flags["particle_trails"] = &uses_particle_trails;
 	actions.render_mode_flags["world_vertex_coords"] = &uses_world_coordinates;
+	actions.render_mode_flags["skip_vertex_transform"] = &skips_vertex_transform;
 	actions.render_mode_flags["shader_driven_instances"] = &shader_driven_instances;
 	actions.render_mode_flags["shader_driven_motion_vectors"] = &shader_driven_motion_vectors;
 
@@ -160,6 +163,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	actions.write_flag_pointers["PROJECTION_MATRIX"] = &writes_modelview_or_projection;
 	actions.write_flag_pointers["VERTEX"] = &uses_vertex;
 	actions.write_flag_pointers["POSITION"] = &uses_position;
+	actions.write_flag_pointers["DEPTH"] = &writes_fragment_depth;
 	actions.write_flag_pointers["TANGENT"] = &writes_tangent;
 	actions.write_flag_pointers["BINORMAL"] = &writes_tangent;
 	actions.write_flag_pointers["Z_CLIP_SCALE"] = &uses_z_clip_scale;

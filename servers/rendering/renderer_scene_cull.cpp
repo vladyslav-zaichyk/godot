@@ -540,6 +540,14 @@ void RendererSceneCull::_instance_queue_update(Instance *p_instance, bool p_upda
 	_instance_update_list.add(&p_instance->update_item);
 }
 
+RenderGeometryInstance *RendererSceneCull::instance_get_render_geometry_instance(RID p_instance, RID p_scenario) const {
+	const Instance *instance = instance_owner.get_or_null(p_instance);
+	if (instance == nullptr || instance->base_type != RSE::INSTANCE_MULTIMESH || instance->base_data == nullptr || instance->scenario == nullptr || (p_scenario.is_valid() && instance->scenario->self != p_scenario)) {
+		return nullptr;
+	}
+	return static_cast<InstanceGeometryData *>(instance->base_data)->geometry_instance;
+}
+
 RID RendererSceneCull::instance_allocate() {
 	return instance_owner.allocate_rid();
 }

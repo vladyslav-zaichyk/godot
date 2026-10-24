@@ -1043,6 +1043,9 @@ void RenderingDevice::_staging_buffer_execute_required_action(StagingBuffers &p_
 
 Error RenderingDevice::buffer_copy(RID p_src_buffer, RID p_dst_buffer, uint32_t p_src_offset, uint32_t p_dst_offset, uint32_t p_size) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	ERR_FAIL_COND_V_MSG(draw_list.active, ERR_INVALID_PARAMETER,
 			"Copying buffers is forbidden during creation of a draw list.");
@@ -1165,6 +1168,9 @@ Error RenderingDevice::_buffer_update(Buffer *p_buffer, RID p_buffer_id, uint32_
 
 Error RenderingDevice::buffer_update(RID p_buffer, uint32_t p_offset, uint32_t p_size, const void *p_data, bool p_skip_check) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	ERR_FAIL_COND_V_MSG(draw_list.active && !p_skip_check, ERR_INVALID_PARAMETER,
 			"Updating buffers is forbidden during creation of a draw list.");
@@ -1182,6 +1188,9 @@ Error RenderingDevice::buffer_update(RID p_buffer, uint32_t p_offset, uint32_t p
 
 Error RenderingDevice::driver_callback_add(RDD::DriverCallback p_callback, void *p_userdata, VectorView<CallbackResource> p_resources) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	ERR_FAIL_COND_V_MSG(draw_list.active, ERR_INVALID_PARAMETER,
 			"Driver callback is forbidden during creation of a draw list.");
@@ -1255,6 +1264,9 @@ void RenderingDevice::update_perf_report() {
 
 Error RenderingDevice::buffer_clear(RID p_buffer, uint32_t p_offset, uint32_t p_size) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	ERR_FAIL_COND_V_MSG((p_size % 4) != 0, ERR_INVALID_PARAMETER,
 			"Size must be a multiple of four.");
@@ -1287,6 +1299,9 @@ Error RenderingDevice::buffer_clear(RID p_buffer, uint32_t p_offset, uint32_t p_
 
 Vector<uint8_t> RenderingDevice::buffer_get_data(RID p_buffer, uint32_t p_offset, uint32_t p_size) {
 	ERR_RENDER_THREAD_GUARD_V(Vector<uint8_t>());
+	if (_reject_compute_callback_operation()) {
+		return Vector<uint8_t>();
+	}
 
 	Buffer *buffer = _get_buffer_from_owner(p_buffer);
 	if (!buffer) {
@@ -1334,6 +1349,9 @@ Vector<uint8_t> RenderingDevice::buffer_get_data(RID p_buffer, uint32_t p_offset
 
 Error RenderingDevice::buffer_get_data_async(RID p_buffer, const Callable &p_callback, uint32_t p_offset, uint32_t p_size) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	Buffer *buffer = _get_buffer_from_owner(p_buffer);
 	if (buffer == nullptr) {
@@ -1449,6 +1467,12 @@ bool RenderingDevice::storage_buffer_is_valid(RID p_buffer, uint64_t p_minimum_s
 	ERR_RENDER_THREAD_GUARD_V(false);
 	const Buffer *buffer = storage_buffer_owner.get_or_null(p_buffer);
 	return buffer && buffer->size >= p_minimum_size && p_size_multiple != 0 && (buffer->size % p_size_multiple) == 0 && buffer->usage.has_flag(RDD::BUFFER_USAGE_STORAGE_BIT) && (!p_require_indirect || buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT));
+}
+
+bool RenderingDevice::storage_buffer_is_nonpersistent(RID p_buffer, uint64_t p_minimum_size, bool p_require_indirect, uint64_t p_size_multiple) {
+	ERR_RENDER_THREAD_GUARD_V(false);
+	const Buffer *buffer = storage_buffer_owner.get_or_null(p_buffer);
+	return buffer && !buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT) && storage_buffer_is_valid(p_buffer, p_minimum_size, p_require_indirect, p_size_multiple);
 }
 
 RID RenderingDevice::storage_buffer_create(uint32_t p_size_bytes, Span<uint8_t> p_data, BitField<StorageBufferUsage> p_usage, BitField<BufferCreationBits> p_creation_bits) {
@@ -2259,6 +2283,9 @@ Error RenderingDevice::_texture_initialize(RID p_texture, uint32_t p_layer, cons
 
 Error RenderingDevice::texture_update(RID p_texture, uint32_t p_layer, const Vector<uint8_t> &p_data) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	ERR_FAIL_COND_V_MSG(draw_list.active, ERR_INVALID_PARAMETER, "Updating textures is forbidden during creation of a draw list.");
 	ERR_FAIL_COND_V_MSG(compute_list.active, ERR_INVALID_PARAMETER, "Updating textures is forbidden during creation of a compute list.");
@@ -2678,6 +2705,9 @@ void RenderingDevice::_texture_clear_depth_stencil(RID p_texture_rid, Texture *p
 
 Vector<uint8_t> RenderingDevice::texture_get_data(RID p_texture, uint32_t p_layer) {
 	ERR_RENDER_THREAD_GUARD_V(Vector<uint8_t>());
+	if (_reject_compute_callback_operation()) {
+		return Vector<uint8_t>();
+	}
 
 	Texture *tex = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL_V(tex, Vector<uint8_t>());
@@ -2797,6 +2827,9 @@ Vector<uint8_t> RenderingDevice::texture_get_data(RID p_texture, uint32_t p_laye
 
 Error RenderingDevice::texture_get_data_async(RID p_texture, uint32_t p_layer, const Callable &p_callback) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	Texture *tex = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL_V(tex, ERR_INVALID_PARAMETER);
@@ -2964,6 +2997,9 @@ uint64_t RenderingDevice::texture_get_native_handle(RID p_texture) {
 
 Error RenderingDevice::texture_copy(RID p_from_texture, RID p_to_texture, const Vector3 &p_from, const Vector3 &p_to, const Vector3 &p_size, uint32_t p_src_mipmap, uint32_t p_dst_mipmap, uint32_t p_src_layer, uint32_t p_dst_layer) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	Texture *src_tex = texture_owner.get_or_null(p_from_texture);
 	ERR_FAIL_NULL_V(src_tex, ERR_INVALID_PARAMETER);
@@ -3045,6 +3081,9 @@ Error RenderingDevice::texture_copy(RID p_from_texture, RID p_to_texture, const 
 
 Error RenderingDevice::texture_resolve_multisample(RID p_from_texture, RID p_to_texture) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	Texture *src_tex = texture_owner.get_or_null(p_from_texture);
 	ERR_FAIL_NULL_V(src_tex, ERR_INVALID_PARAMETER);
@@ -3124,6 +3163,9 @@ bool RenderingDevice::texture_is_discardable(RID p_texture) {
 
 Error RenderingDevice::texture_clear(RID p_texture, const Color &p_color, uint32_t p_base_mipmap, uint32_t p_mipmaps, uint32_t p_base_layer, uint32_t p_layers) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_UNAVAILABLE);
+	if (_reject_compute_callback_operation()) {
+		return ERR_BUSY;
+	}
 
 	Texture *src_tex = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL_V(src_tex, ERR_INVALID_PARAMETER);
@@ -5521,6 +5563,9 @@ Error RenderingDevice::screen_free(DisplayServerEnums::WindowID p_screen) {
 
 RenderingDevice::DrawListID RenderingDevice::draw_list_begin_for_screen(DisplayServerEnums::WindowID p_screen, const Color &p_clear_color) {
 	ERR_RENDER_THREAD_GUARD_V(INVALID_ID);
+	if (_reject_compute_callback_operation()) {
+		return INVALID_ID;
+	}
 
 	ERR_FAIL_COND_V_MSG(draw_list.active, INVALID_ID, "Only one draw list can be active at the same time.");
 	ERR_FAIL_COND_V_MSG(compute_list.active, INVALID_ID, "Only one draw/compute list can be active at the same time.");
@@ -5559,6 +5604,9 @@ RenderingDevice::DrawListID RenderingDevice::_draw_list_begin_bind(RID p_framebu
 
 RenderingDevice::DrawListID RenderingDevice::draw_list_begin(RID p_framebuffer, BitField<DrawFlags> p_draw_flags, VectorView<Color> p_clear_color_values, float p_clear_depth_value, uint32_t p_clear_stencil_value, const Rect2 &p_region, uint32_t p_breadcrumb) {
 	ERR_RENDER_THREAD_GUARD_V(INVALID_ID);
+	if (_reject_compute_callback_operation()) {
+		return INVALID_ID;
+	}
 
 	ERR_FAIL_COND_V_MSG(draw_list.active, INVALID_ID, "Only one draw list can be active at the same time.");
 
@@ -6534,6 +6582,9 @@ void RenderingDevice::_draw_list_end(Rect2i *r_last_viewport) {
 
 void RenderingDevice::draw_list_end() {
 	ERR_RENDER_THREAD_GUARD();
+	if (_reject_compute_callback_operation()) {
+		return;
+	}
 
 	ERR_FAIL_COND_MSG(!draw_list.active, "Immediate draw list is already inactive.");
 
@@ -6564,6 +6615,9 @@ void RenderingDevice::draw_list_end() {
 
 RenderingDevice::RaytracingListID RenderingDevice::raytracing_list_begin() {
 	ERR_RENDER_THREAD_GUARD_V(INVALID_ID);
+	if (_reject_compute_callback_operation()) {
+		return INVALID_ID;
+	}
 
 	ERR_FAIL_COND_V_MSG(!has_feature(SUPPORTS_RAYTRACING_PIPELINE), INVALID_ID, "The current rendering device has no raytracing pipeline support.");
 
@@ -6841,6 +6895,9 @@ void RenderingDevice::raytracing_list_end() {
 
 RenderingDevice::ComputeListID RenderingDevice::compute_list_begin() {
 	ERR_RENDER_THREAD_GUARD_V(INVALID_ID);
+	if (_reject_compute_callback_operation()) {
+		return INVALID_ID;
+	}
 
 	ERR_FAIL_COND_V_MSG(compute_list.active, INVALID_ID, "Only one compute list can be active at the same time.");
 	ERR_FAIL_COND_V_MSG(raytracing_list.active, INVALID_ID, "Only one raytracing list can be active at the same time.");
@@ -6850,6 +6907,48 @@ RenderingDevice::ComputeListID RenderingDevice::compute_list_begin() {
 	draw_graph.add_compute_list_begin();
 
 	return ID_TYPE_COMPUTE_LIST;
+}
+
+bool RenderingDevice::_reject_compute_callback_operation() {
+	if (compute_callback_scope_active && !compute_callback_scope_internal) {
+		compute_callback_scope_violated = true;
+		return true;
+	}
+	return false;
+}
+
+bool RenderingDevice::compute_callback_reject_operation() {
+	ERR_RENDER_THREAD_GUARD_V(true);
+	return _reject_compute_callback_operation();
+}
+
+RenderingDevice::ComputeListID RenderingDevice::compute_list_begin_callback_scope() {
+	ERR_RENDER_THREAD_GUARD_V(INVALID_ID);
+	if (_reject_compute_callback_operation() || compute_list.active || draw_list.active || raytracing_list.active) {
+		return INVALID_ID;
+	}
+	const ComputeListID list = compute_list_begin();
+	if (list == INVALID_ID) {
+		return INVALID_ID;
+	}
+	compute_callback_scope_active = true;
+	compute_callback_scope_violated = false;
+	return list;
+}
+
+bool RenderingDevice::compute_list_end_callback_scope() {
+	ERR_RENDER_THREAD_GUARD_V(false);
+	if (!compute_callback_scope_active) {
+		return false;
+	}
+	const bool valid = !compute_callback_scope_violated && compute_list.active && !draw_list.active && !raytracing_list.active;
+	compute_callback_scope_active = false;
+	compute_callback_scope_internal = false;
+	compute_callback_scope_violated = false;
+	if (compute_list.active) {
+		compute_list_end();
+	}
+	return valid;
 }
 
 void RenderingDevice::compute_list_bind_compute_pipeline(ComputeListID p_list, RID p_compute_pipeline) {
@@ -7231,8 +7330,10 @@ void RenderingDevice::compute_list_add_barrier(ComputeListID p_list) {
 	ERR_FAIL_COND(p_list != ID_TYPE_COMPUTE_LIST || !compute_list.active);
 
 	compute_list_barrier_state = compute_list.state;
+	compute_callback_scope_internal = true;
 	compute_list_end();
 	compute_list_begin();
+	compute_callback_scope_internal = false;
 
 	if (compute_list_barrier_state.pipeline.is_valid()) {
 		compute_list_bind_compute_pipeline(p_list, compute_list_barrier_state.pipeline);
@@ -7252,6 +7353,9 @@ void RenderingDevice::compute_list_add_barrier(ComputeListID p_list) {
 
 void RenderingDevice::compute_list_end() {
 	ERR_RENDER_THREAD_GUARD();
+	if (_reject_compute_callback_operation()) {
+		return;
+	}
 
 	ERR_FAIL_COND(!compute_list.active);
 
@@ -7765,6 +7869,9 @@ bool RenderingDevice::_dependencies_make_mutable(RID p_id, RDG::ResourceTracker 
 
 void RenderingDevice::free_rid(RID p_rid) {
 	ERR_RENDER_THREAD_GUARD();
+	if (_reject_compute_callback_operation()) {
+		return;
+	}
 
 	_free_dependencies(p_rid); // Recursively erase dependencies first, to avoid potential API problems.
 	_free_internal(p_rid);
@@ -8046,6 +8153,9 @@ void RenderingDevice::swap_buffers(bool p_present) {
 
 void RenderingDevice::submit() {
 	ERR_RENDER_THREAD_GUARD();
+	if (_reject_compute_callback_operation()) {
+		return;
+	}
 	ERR_FAIL_COND_MSG(is_main_instance, "Only local devices can submit and sync.");
 	ERR_FAIL_COND_MSG(local_device_processing, "device already submitted, call sync to wait until done.");
 
@@ -8056,6 +8166,9 @@ void RenderingDevice::submit() {
 
 void RenderingDevice::sync() {
 	ERR_RENDER_THREAD_GUARD();
+	if (_reject_compute_callback_operation()) {
+		return;
+	}
 	ERR_FAIL_COND_MSG(is_main_instance, "Only local devices can submit and sync.");
 	ERR_FAIL_COND_MSG(!local_device_processing, "sync can only be called after a submit");
 

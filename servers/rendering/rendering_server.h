@@ -621,6 +621,11 @@ public:
 	virtual void viewport_set_mesh_lod_threshold(RID p_viewport, float p_pixels) = 0;
 
 	virtual void viewport_set_use_occlusion_culling(RID p_viewport, bool p_use_occlusion_culling) = 0;
+	virtual Error viewport_configure_gpu_occlusion_prepass(RID p_viewport, uint32_t p_occluder_layer_mask, const Callable &p_producer) = 0;
+	virtual Error viewport_register_gpu_occlusion_consumer(RID p_viewport, RID p_geometry_instance, RID p_identity_bank, int64_t p_candidate_identity_base, RID p_candidate_commands, int64_t p_candidate_command_byte_offset, int64_t p_logical_slot_capacity) = 0;
+	virtual Error viewport_unregister_gpu_occlusion_consumer(RID p_viewport, RID p_geometry_instance) = 0;
+	virtual Error viewport_clear_gpu_occlusion_prepass(RID p_viewport) = 0;
+	virtual Dictionary viewport_get_gpu_occlusion_prepass_outcome(RID p_viewport) const = 0;
 	virtual void viewport_set_occlusion_rays_per_thread(int p_rays_per_thread) = 0;
 
 	virtual void viewport_set_occlusion_culling_build_quality(RSE::ViewportOcclusionCullingBuildQuality p_quality) = 0;

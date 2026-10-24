@@ -1,0 +1,51 @@
+#version 450
+// A deterministic sixteen-slot scan, not a production allocator or performance sample.
+layout(local_size_x=1,local_size_y=1,local_size_z=1) in;
+layout(set=0,binding=0,std430) readonly buffer Pyramid { uint words[]; } pyramid;
+layout(set=0,binding=1,std430) readonly buffer Slots { uvec4 data[]; } slots;
+layout(set=0,binding=2,std430) buffer IdBank { uint words[]; } ids;
+layout(set=0,binding=3,std430) buffer Stats { uint words[]; } stats;
+layout(push_constant,std430) uniform Publication {
+    mat4 world_to_clip;
+    uvec4 controls; // capacity, force_zero, epoch low/high
+    uvec4 generation; // configuration generation low/high, reserved
+} pc;
+const uint offsets[7]=uint[7](4u,2052u,2564u,2692u,2724u,2732u,2734u);
+bool visible(uint id) {
+    uvec4 state=slots.data[id*2u+1u];
+    if (state.x!=1u || state.z!=id || state.w!=0x413133u) return false;
+    vec4 root=uintBitsToFloat(slots.data[id*2u]);
+    vec2 low=vec2(1e20), high=vec2(-1e20);
+    float nearest=0.0;
+    for (uint corner=0u;corner<4u;corner++) {
+        vec2 sign_xy=vec2((corner&1u)!=0u?1.0:-1.0,(corner&2u)!=0u?1.0:-1.0);
+        vec4 clip=pc.world_to_clip*vec4(root.xyz+vec3(sign_xy*root.w,0.0),1.0);
+        if (any(isnan(clip)) || any(isinf(clip)) || clip.w<=0.0) return true;
+        vec3 ndc=clip.xyz/clip.w;
+        if (ndc.z<0.0 || ndc.z>1.0) return true;
+        // The supplied native projection already includes depth and Y correction.
+        vec2 pixel=(ndc.xy*0.5+0.5)*vec2(64.0,32.0);
+        low=min(low,pixel); high=max(high,pixel); nearest=max(nearest,ndc.z);
+    }
+    ivec4 rect=ivec4(ivec2(floor(low))-ivec2(1),ivec2(ceil(high))+ivec2(1));
+    if (rect.x<0 || rect.y<0 || rect.z>64 || rect.w>32 || rect.z<=rect.x || rect.w<=rect.y) return true;
+    uint extent=uint(max(rect.z-rect.x,rect.w-rect.y));
+    uint level=0u,block=1u;
+    while (block<extent && level<6u) {block*=2u;level++;}
+    uvec2 lo=uvec2(rect.xy)/block,hi=uvec2(rect.zw-ivec2(1))/block;
+    uint width=max(1u,64u>>level);
+    float minimum=1.0;
+    for(uint y=lo.y;y<=hi.y;y++) for(uint x=lo.x;x<=hi.x;x++)
+        minimum=min(minimum,uintBitsToFloat(pyramid.words[offsets[level]+y*width+x]));
+    return !(minimum>nearest+0.00002);
+}
+void main() {
+    uint admitted[16],total=0u;
+    if(pc.controls.y==0u) for(uint i=0u;i<16u;i++) if(visible(i)) admitted[total++]=i;
+    bool overflow=total>pc.controls.x;
+    uint written=overflow?0u:total;
+    if(!overflow) for(uint i=0u;i<written;i++) ids.words[16u+i]=admitted[i];
+    stats.words[4]=written;stats.words[5]=total;stats.words[6]=overflow?1u:0u;stats.words[7]=pc.controls.y;
+    stats.words[8]=pc.controls.z;stats.words[9]=pc.controls.w;
+    stats.words[10]=pc.generation.x;stats.words[11]=pc.generation.y;
+}

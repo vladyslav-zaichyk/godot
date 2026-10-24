@@ -30,6 +30,8 @@
 
 #include "render_forward_clustered.h"
 
+#include "core/os/os.h"
+
 #include "core/config/project_settings.h"
 #include "servers/rendering/renderer_rd/environment/fog.h"
 #include "servers/rendering/renderer_rd/framebuffer_cache_rd.h"
@@ -42,6 +44,7 @@
 #include "servers/xr/xr_interface.h"
 #include "servers/xr/xr_server.h"
 #endif
+#include "servers/rendering/renderer_scene_cull.h"
 #include "servers/rendering/renderer_viewport.h"
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server_default.h"
@@ -53,6 +56,15 @@ using namespace RendererSceneRenderImplementation;
 #define PRELOAD_PIPELINES_ON_SURFACE_CACHE_CONSTRUCTION 1
 
 #define FADE_ALPHA_PASS_THRESHOLD 0.999
+
+static bool _gpu_occlusion_projection_is_finite(const Projection &p_projection) {
+	for (uint32_t column = 0; column < 4; column++) {
+		if (!p_projection.columns[column].is_finite()) {
+			return false;
+		}
+	}
+	return true;
+}
 
 void RenderForwardClustered::RenderBufferDataForwardClustered::ensure_specular() {
 	ERR_FAIL_NULL(render_buffers);
@@ -307,6 +319,108 @@ void RenderForwardClustered::update() {
 
 /// RENDERING ///
 
+bool RenderForwardClustered::_gpu_occlusion_occluder_eligible(const GeometryInstanceSurfaceDataCache *p_surface, uint32_t p_layer_mask) const {
+	const GeometryInstanceForwardClustered *owner = p_surface->owner;
+	RendererRD::MeshStorage *mesh_storage = RendererRD::MeshStorage::get_singleton();
+	if ((owner->layer_mask & p_layer_mask) == 0 || owner->data->base_type != RSE::INSTANCE_MESH ||
+			owner->mesh_instance.is_valid() || owner->data->skeleton.is_valid() || owner->data->material_overlay.is_valid() ||
+			owner->fade_near || owner->fade_far || owner->parent_fade_alpha != 1.0f || owner->force_alpha != 1.0f ||
+			!owner->transform.is_finite() || !owner->transformed_aabb.is_finite() ||
+			owner->lightmap_instance.is_valid() || owner->lightmap_sh || owner->data->use_dynamic_gi || owner->data->use_baked_light ||
+			!mesh_storage->owns_mesh(owner->data->base) || mesh_storage->mesh_get_blend_shape_count(owner->data->base) != 0 ||
+			mesh_storage->mesh_get_shadow_mesh(owner->data->base).is_valid() ||
+			!p_surface->surface || p_surface->surface != p_surface->surface_shadow ||
+			p_surface->primitive != RSE::PRIMITIVE_TRIANGLES || mesh_storage->mesh_surface_has_lod(p_surface->surface) ||
+			!(p_surface->flags & GeometryInstanceSurfaceDataCache::FLAG_PASS_DEPTH) ||
+			!(p_surface->flags & GeometryInstanceSurfaceDataCache::FLAG_PASS_OPAQUE) ||
+			(p_surface->flags & (GeometryInstanceSurfaceDataCache::FLAG_PASS_ALPHA | GeometryInstanceSurfaceDataCache::FLAG_USES_STENCIL)) ||
+			!p_surface->material || p_surface->material->next_pass.is_valid()) {
+		return false;
+	}
+	const SceneShaderForwardClustered::ShaderData *shader = p_surface->shader;
+	// Require the ordinary undeformed back-face-culled geometry path. In
+	// particular, DEPTH and skip_vertex_transform are not covered by the old
+	// shared-shadow-material predicate and must never supply occlusion proof.
+	return shader && shader->is_valid() && shader->uses_shared_shadow_material() &&
+			!shader->writes_fragment_depth && !shader->skips_vertex_transform && !shader->uses_time &&
+			!shader->uses_alpha && !shader->uses_blend_alpha && !shader->uses_alpha_clip && !shader->uses_alpha_antialiasing &&
+			!shader->uses_screen_texture && !shader->uses_depth_texture && !shader->uses_normal_texture &&
+			shader->depth_draw == SceneShaderForwardClustered::ShaderData::DEPTH_DRAW_OPAQUE &&
+			shader->depth_test == SceneShaderForwardClustered::ShaderData::DEPTH_TEST_ENABLED;
+}
+
+Error RenderForwardClustered::gpu_occlusion_validate_consumer(RenderGeometryInstance *p_instance, const GpuOcclusionConsumer &p_consumer, uint64_t *r_signature, Vector<RID> *r_shader_buffers) {
+	if (!p_instance) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (OS::get_singleton()->get_current_rendering_driver_name() != "vulkan" || OS::get_singleton()->get_current_rendering_method() != "forward_plus") {
+		return ERR_UNAVAILABLE;
+	}
+	GeometryInstanceForwardClustered *owner = static_cast<GeometryInstanceForwardClustered *>(p_instance);
+	RendererRD::MeshStorage *mesh_storage = RendererRD::MeshStorage::get_singleton();
+	RD *rd = RD::get_singleton();
+	if (!owner->data || owner->data->base_type != RSE::INSTANCE_MULTIMESH || owner->data->base != p_consumer.multimesh ||
+			!mesh_storage->owns_multimesh(p_consumer.multimesh) || !mesh_storage->multimesh_is_shader_driven(p_consumer.multimesh) ||
+			!mesh_storage->multimesh_is_using_shared_buffers(p_consumer.multimesh) ||
+			mesh_storage->multimesh_get_shared_draw_submission_mode(p_consumer.multimesh) != RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP ||
+			mesh_storage->multimesh_get_shared_draw_command_count(p_consumer.multimesh) != 1 ||
+			mesh_storage->_multimesh_get_command_buffer_rd_rid(p_consumer.multimesh) != p_consumer.fallback_commands ||
+			mesh_storage->multimesh_get_command_byte_offset(p_consumer.multimesh) != p_consumer.fallback_command_byte_offset ||
+			mesh_storage->_multimesh_get_instance_count(p_consumer.multimesh) != p_consumer.draw_slot_capacity ||
+			p_consumer.logical_slot_capacity <= 0 || p_consumer.candidate_identity_base < p_consumer.logical_slot_capacity ||
+			p_consumer.candidate_identity_base > INT32_MAX ||
+			p_consumer.logical_slot_capacity > INT32_MAX - p_consumer.candidate_identity_base ||
+			p_consumer.candidate_identity_base + p_consumer.logical_slot_capacity > p_consumer.draw_slot_capacity ||
+			p_consumer.candidate_command_byte_offset < 0 || p_consumer.candidate_command_byte_offset > INT32_MAX ||
+			p_consumer.candidate_command_byte_offset % 4 != 0 || p_consumer.fallback_command_byte_offset < 0 ||
+			!rd->get_device_driver()->supports_indirect_first_instance() ||
+			!rd->storage_buffer_is_nonpersistent(p_consumer.identity_bank, uint64_t(p_consumer.candidate_identity_base + p_consumer.logical_slot_capacity) * 4) ||
+			!rd->storage_buffer_is_nonpersistent(p_consumer.candidate_commands, uint64_t(p_consumer.candidate_command_byte_offset) + 20, true) ||
+			!rd->storage_buffer_is_nonpersistent(p_consumer.fallback_commands, uint64_t(p_consumer.fallback_command_byte_offset) + 20, true)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (owner->mesh_instance.is_valid() || owner->data->skeleton.is_valid() || owner->data->material_overlay.is_valid() ||
+			owner->fade_near || owner->fade_far || owner->parent_fade_alpha != 1.0f || owner->force_alpha != 1.0f ||
+			!owner->transform.is_finite() || !owner->transformed_aabb.is_finite() || !owner->transformed_aabb.has_volume()) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (!mesh_storage->multimesh_uses_shader_motion_vectors(p_consumer.multimesh) &&
+			(RSG::viewport->get_num_viewports_with_motion_vectors() > 0 ||
+					RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() > 0)) {
+		return ERR_UNAVAILABLE;
+	}
+	_update_dirty_geometry_instances();
+	GeometryInstanceSurfaceDataCache *surface = owner->surface_caches;
+	if (!surface || surface->next || surface->surface_index != 0 || !owner->shader_driven_instances ||
+			owner->instance_count == 0 || owner->gpu_occlusion_signature == 0 ||
+			(p_consumer.renderer_signature != 0 && p_consumer.renderer_signature != owner->gpu_occlusion_signature) ||
+			!(surface->flags & GeometryInstanceSurfaceDataCache::FLAG_PASS_DEPTH) ||
+			!(surface->flags & GeometryInstanceSurfaceDataCache::FLAG_PASS_OPAQUE) ||
+			(surface->flags & (GeometryInstanceSurfaceDataCache::FLAG_PASS_ALPHA | GeometryInstanceSurfaceDataCache::FLAG_USES_STENCIL)) ||
+			!surface->shader || !surface->shader->is_valid() || !surface->shader->shader_driven_instances ||
+			surface->shader->uses_point_size || surface->shader->writes_fragment_depth ||
+			(owner->shader_driven_motion_vectors && !surface->shader->shader_driven_motion_vectors) ||
+			!surface->material || surface->material->next_pass.is_valid() || surface->shader_shadow != surface->shader) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const Vector<RID> &buffers = surface->material->get_buffer_bindings();
+	if (!buffers.has(p_consumer.identity_bank) || (p_consumer.renderer_signature != 0 && buffers != p_consumer.shader_buffers)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	for (const RID &buffer : buffers) {
+		if (buffer == p_consumer.candidate_commands || buffer == p_consumer.fallback_commands || !rd->storage_buffer_is_valid(buffer, 1)) {
+			return ERR_INVALID_PARAMETER;
+		}
+	}
+	if (r_signature) {
+		*r_signature = owner->gpu_occlusion_signature;
+	}
+	if (r_shader_buffers) {
+		*r_shader_buffers = buffers;
+	}
+	return OK;
+}
+
 template <RenderForwardClustered::PassMode p_pass_mode, uint32_t p_color_pass_flags>
 void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p_draw_list, RenderingDevice::FramebufferFormatID p_framebuffer_Format, RenderListParameters *p_params, uint32_t p_from_element, uint32_t p_to_element) {
 	RendererRD::MeshStorage *mesh_storage = RendererRD::MeshStorage::get_singleton();
@@ -319,6 +433,9 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 			RD::get_singleton()->draw_list_bind_uniform_set_checked(draw_list, p_params->render_pass_uniform_set, RENDER_PASS_UNIFORM_SET) != OK ||
 			RD::get_singleton()->draw_list_bind_uniform_set_checked(draw_list, scene_shader.default_vec4_xform_uniform_set, TRANSFORMS_UNIFORM_SET) != OK) {
 		WARN_PRINT_ONCE("Forward+ skipped a render-list batch because a global binding conflicts with counted indirect storage or is invalid.");
+		if (p_params->gpu_occlusion_submission_failed) {
+			*p_params->gpu_occlusion_submission_failed = true;
+		}
 		return;
 	}
 
@@ -359,9 +476,16 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 			(p_color_pass_flags & COLOR_PASS_FLAG_MOTION_VECTORS) != 0;
 
 	for (uint32_t i = p_from_element; i < p_to_element; i++) {
+		if (p_params->gpu_occlusion_early_surfaces &&
+				bool((*p_params->gpu_occlusion_early_surfaces)[i]) != p_params->gpu_occlusion_draw_early) {
+			continue;
+		}
 		const GeometryInstanceSurfaceDataCache *surf = p_params->elements[i];
 		const RenderElementInfo &element_info = p_params->element_info[i];
 		auto reject_surface_binding = [&](Error p_error) {
+			if (p_params->gpu_occlusion_submission_failed) {
+				*p_params->gpu_occlusion_submission_failed = true;
+			}
 			// A failed checked bind never publishes its cache value. Earlier successful
 			// bindings may have changed state, so force the next owner to rebind all of it.
 			invalidate_bindings();
@@ -696,8 +820,17 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 				RD::get_singleton()->draw_list_draw(draw_list, false, mesh_storage->mesh_surface_get_vertex_count(mesh_surface), instance_count * 6);
 			} else if (indirect) {
 				const RID multimesh = surf->owner->data->base;
-				const RID commands = mesh_storage->_multimesh_get_command_buffer_rd_rid(multimesh);
-				const uint32_t offset = uint32_t(mesh_storage->multimesh_get_command_byte_offset(multimesh));
+				RID commands = mesh_storage->_multimesh_get_command_buffer_rd_rid(multimesh);
+				uint32_t offset = uint32_t(mesh_storage->multimesh_get_command_byte_offset(multimesh));
+				if (p_params->gpu_occlusion_selection) {
+					const GpuOcclusionDrawSelection *selection = p_params->gpu_occlusion_selection->getptr(surf->owner);
+					if (selection) {
+						// Only the command tuple is render-local. Geometry, materials,
+						// transforms and persistent MultiMesh attachments stay intact.
+						commands = selection->commands;
+						offset = selection->byte_offset;
+					}
+				}
 				if (surf->owner->shader_driven_instances) {
 					const uint32_t count = uint32_t(mesh_storage->multimesh_get_shared_draw_command_count(multimesh));
 					const uint32_t stride = uint32_t(mesh_storage->multimesh_get_shared_draw_command_stride(multimesh));
@@ -731,6 +864,8 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 			} else {
 				RD::get_singleton()->draw_list_draw(draw_list, index_array_rd.is_valid(), instance_count);
 			}
+		} else if (p_params->gpu_occlusion_submission_failed) {
+			*p_params->gpu_occlusion_submission_failed = true;
 		}
 
 		i += element_info.repeat - 1; //skip equal elements
@@ -1833,6 +1968,16 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 	Ref<RenderSceneBuffersRD> rb = p_render_data->render_buffers;
 	ERR_FAIL_COND(rb.is_null());
+	Ref<GpuOcclusionPrepassState> gpu_occlusion = rb->get_gpu_occlusion_prepass_state();
+	HashMap<RenderGeometryInstance *, GpuOcclusionDrawSelection> gpu_occlusion_selection;
+	LocalVector<uint8_t> gpu_occlusion_early_surfaces;
+	bool gpu_occlusion_split = false;
+	uint32_t gpu_occlusion_early_count = 0;
+	if (gpu_occlusion.is_valid()) {
+		// Viewport owns the actual epoch. Never let a previous render's candidate
+		// survive an unsupported configuration or an early native return.
+		gpu_occlusion->set_outcome("native_not_reached");
+	}
 	Ref<RenderBufferDataForwardClustered> rb_data;
 	if (rb->has_custom_data(RB_SCOPE_FORWARD_CLUSTERED)) {
 		// Our forward clustered custom data buffer will only be available when we're rendering our normal view.
@@ -2249,6 +2394,101 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 	bool using_ssao = depth_pre_pass && !is_reflection_probe && p_render_data->environment.is_valid() && environment_get_ssao_enabled(p_render_data->environment);
 
+	if (gpu_occlusion.is_valid() && gpu_occlusion->producer.is_valid()) {
+		for (const GpuOcclusionConsumer &consumer : gpu_occlusion->consumers) {
+			RenderGeometryInstance *instance = static_cast<RendererSceneCull *>(RSG::scene)->instance_get_render_geometry_instance(consumer.instance);
+			if (gpu_occlusion_validate_consumer(instance, consumer) != OK) {
+				gpu_occlusion->set_outcome("invalid_fallback");
+				gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+				return;
+			}
+		}
+		bool supported = false;
+#ifdef WINDOWS_ENABLED
+		supported = OS::get_singleton()->get_current_rendering_driver_name() == "vulkan" &&
+				gpu_occlusion_signature_counter != UINT64_MAX &&
+				gpu_occlusion->recording && gpu_occlusion->epoch > 0 && gpu_occlusion->configuration_generation > 0 &&
+				!is_reflection_probe && !has_primary_xr_interface && rb_data.is_valid() &&
+				p_render_data->scene_data->view_count == 1 && p_render_data->scene_data->cam_orthogonal &&
+				p_render_data->scene_data->cam_transform.is_finite() && _gpu_occlusion_projection_is_finite(p_render_data->scene_data->get_cam_projection()) &&
+				(p_render_data->render_region == Rect2i() || p_render_data->render_region == Rect2i(Point2i(), screen_size)) &&
+				screen_size.x > 0 && screen_size.y > 0 && screen_size == rb->get_target_size() &&
+				rb->get_scaling_3d_mode() == RSE::VIEWPORT_SCALING_3D_MODE_OFF &&
+				rb->get_vrs_mode() == RSE::VIEWPORT_VRS_DISABLED && !use_msaa && !using_taa &&
+				!motion_vectors_required && !using_motion_pass && !using_upscaling &&
+				RSG::viewport->get_num_viewports_with_motion_vectors() == 0 &&
+				RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() == 0 &&
+				depth_pre_pass && depth_pass_mode == PASS_MODE_DEPTH && depth_pass_clear.is_empty() &&
+				!using_ssao && !using_ssil && !using_ssr && !using_sdfgi && !using_voxelgi && !using_separate_specular &&
+				!ce_needs_motion_vectors && !ce_needs_normal_roughness && !ce_needs_separate_specular &&
+				!p_render_data->compositor.is_valid() && !p_render_data->transparent_bg &&
+				!scene_state.used_opaque_stencil && !scene_state.used_sss && !scene_state.used_lightmap &&
+				!scene_state.used_screen_texture && !scene_state.used_normal_texture && !scene_state.used_depth_texture &&
+				render_list[RENDER_LIST_ALPHA].elements.is_empty() && render_list[RENDER_LIST_MOTION].elements.is_empty() &&
+				p_render_data->render_shadow_count == 0 && p_render_data->directional_shadows.is_empty() &&
+				p_render_data->shadows.is_empty() && p_render_data->cube_shadows.is_empty() &&
+				p_render_data->reflection_probes->size() == 0 && p_render_data->voxel_gi_instances->size() == 0 &&
+				p_render_data->render_sdfgi_region_count == 0 && !rb->has_custom_data(RB_SCOPE_FOG) &&
+				(!p_render_data->environment.is_valid() || !environment_get_volumetric_fog_enabled(p_render_data->environment)) &&
+				get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_DISABLED &&
+				!_needs_post_prepass_render(p_render_data, false);
+#endif
+		if (supported) {
+			// A cached shadow atlas may be used even when this render schedules
+			// no new shadow draws. Exclude shadow-enabled lights, not only worklists.
+			for (uint32_t i = 0; i < p_render_data->lights->size(); i++) {
+				const RID light_instance = (*p_render_data->lights)[i];
+				if (light_storage->light_has_shadow(light_storage->light_instance_get_base_light(light_instance))) {
+					supported = false;
+					break;
+				}
+			}
+		}
+		if (supported) {
+			const RID depth = rb->get_depth_texture(0);
+			if (!RD::get_singleton()->texture_is_valid(depth)) {
+				supported = false;
+			} else {
+				const RD::TextureFormat format = RD::get_singleton()->texture_get_format(depth);
+				supported = format.samples == RD::TEXTURE_SAMPLES_1 && format.width == uint32_t(screen_size.x) &&
+						format.height == uint32_t(screen_size.y) && (format.usage_bits & RD::TEXTURE_USAGE_SAMPLING_BIT) &&
+						(format.usage_bits & RD::TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) &&
+						(format.format == RD::DATA_FORMAT_D32_SFLOAT_S8_UINT || format.format == RD::DATA_FORMAT_D24_UNORM_S8_UINT);
+			}
+		}
+		if (supported) {
+			RenderList &opaque = render_list[RENDER_LIST_OPAQUE];
+			gpu_occlusion_early_surfaces.resize(opaque.elements.size());
+			for (uint32_t i = 0; i < opaque.elements.size(); i++) {
+				const bool early = _gpu_occlusion_occluder_eligible(opaque.elements[i], gpu_occlusion->layer_mask);
+				gpu_occlusion_early_surfaces[i] = early;
+				gpu_occlusion_early_count += early ? 1 : 0;
+			}
+			gpu_occlusion->outcome["early_surface_count"] = int64_t(gpu_occlusion_early_count);
+			if (gpu_occlusion_early_count <= 4096) {
+				// Keep the original array and uploaded InstanceData indices. This
+				// first implementation deliberately disables opaque auto-instancing
+				// only for an admitted split; mixed phase repeats cannot cross it.
+				for (uint32_t i = 0; i < opaque.elements.size(); i++) {
+					if (render_info && opaque.element_info[i].repeat == 1) {
+						render_info[RSE::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]--;
+					}
+					opaque.element_info[i].repeat = 1;
+					if (render_info) {
+						render_info[RSE::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+					}
+				}
+				gpu_occlusion_split = true;
+				gpu_occlusion->outcome["auto_instancing_disabled"] = true;
+			} else {
+				gpu_occlusion->set_outcome("occluder_capacity_exceeded");
+				gpu_occlusion->outcome["early_surface_count"] = int64_t(gpu_occlusion_early_count);
+			}
+		} else {
+			gpu_occlusion->set_outcome("unsupported_view");
+		}
+	}
+
 	if (depth_pre_pass) { //depth pre pass
 		bool needs_pre_resolve = _needs_post_prepass_render(p_render_data, using_sdfgi || using_voxelgi);
 		if (needs_pre_resolve) {
@@ -2271,7 +2511,95 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		bool finish_depth = using_ssao || using_ssil || using_sdfgi || using_voxelgi || ce_pre_opaque_resolved_depth || ce_post_opaque_resolved_depth;
 		RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_OPAQUE].elements.size(), reverse_cull, depth_pass_mode, 0, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization, motion_vectors_required);
 		render_list_params.allow_counted_instances = allow_counted_instances;
-		_render_list_with_draw_list(&render_list_params, depth_framebuffer, RD::DrawFlags(needs_pre_resolve ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_ALL), depth_pass_clear, 0.0f, 0u, p_render_data->render_region);
+		if (gpu_occlusion_split) {
+			bool submission_failed = false;
+			render_list_params.gpu_occlusion_early_surfaces = &gpu_occlusion_early_surfaces;
+			render_list_params.gpu_occlusion_draw_early = true;
+			render_list_params.gpu_occlusion_submission_failed = &submission_failed;
+			_render_list_with_draw_list(&render_list_params, depth_framebuffer, RD::DRAW_CLEAR_ALL, Vector<Color>(), 0.0f, 0u, p_render_data->render_region);
+			if (submission_failed) {
+				gpu_occlusion->set_outcome("early_depth_submission_failed");
+				gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+				RD::get_singleton()->draw_command_end_label();
+				return;
+			}
+
+			struct ProducerScope {
+				bool active = true;
+				bool close() {
+					active = false;
+					return RD::get_singleton()->compute_list_end_callback_scope();
+				}
+				~ProducerScope() {
+					if (active) {
+						RD::get_singleton()->compute_list_end_callback_scope();
+					}
+				}
+			};
+			const RD::ComputeListID compute_list = RD::get_singleton()->compute_list_begin_callback_scope();
+			if (compute_list < 0) {
+				gpu_occlusion->set_outcome("producer_scope_unavailable");
+				gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+				RD::get_singleton()->draw_command_end_label();
+				return;
+			}
+			ProducerScope scope;
+			const uint64_t metadata_revision = gpu_occlusion_signature_counter;
+			const uint64_t epoch = gpu_occlusion->epoch;
+			const uint64_t generation = gpu_occlusion->configuration_generation;
+			Ref<RenderGpuOcclusionContext> context;
+			context.instantiate();
+			context->prepare(gpu_occlusion->viewport, epoch, generation, 0, screen_size,
+					p_render_data->scene_data->get_cam_projection(), p_render_data->scene_data->cam_transform, rb->get_depth_texture(0), compute_list);
+			const Variant context_argument = context;
+			const Variant *arguments[] = { &context_argument };
+			Variant acknowledgment;
+			Callable::CallError call_error;
+			gpu_occlusion->producer.callp(arguments, 1, acknowledgment, call_error);
+			context->invalidate();
+			const bool scope_intact = scope.close();
+			if (!scope_intact || metadata_revision != gpu_occlusion_signature_counter ||
+					gpu_occlusion->epoch != epoch || gpu_occlusion->configuration_generation != generation) {
+				gpu_occlusion->set_outcome("producer_scope_or_scene_mutation");
+				gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+				RD::get_singleton()->draw_command_end_label();
+				return;
+			}
+			for (const GpuOcclusionConsumer &consumer : gpu_occlusion->consumers) {
+				RenderGeometryInstance *instance = static_cast<RendererSceneCull *>(RSG::scene)->instance_get_render_geometry_instance(consumer.instance);
+				if (gpu_occlusion_validate_consumer(instance, consumer) != OK) {
+					gpu_occlusion->set_outcome("producer_invalidated_fallback");
+					gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+					RD::get_singleton()->draw_command_end_label();
+					return;
+				}
+			}
+			const bool selected = call_error.error == Callable::CallError::CALL_OK &&
+					GpuOcclusionPrepassState::validate_ack(acknowledgment, epoch, generation);
+			gpu_occlusion->set_outcome(selected ? "producer_acknowledged" : "producer_ack_rejected", selected);
+			gpu_occlusion->outcome["early_surface_count"] = int64_t(gpu_occlusion_early_count);
+			gpu_occlusion->outcome["remaining_surface_count"] = int64_t(render_list[RENDER_LIST_OPAQUE].elements.size() - gpu_occlusion_early_count);
+			gpu_occlusion->outcome["auto_instancing_disabled"] = true;
+			if (selected) {
+				for (const GpuOcclusionConsumer &consumer : gpu_occlusion->consumers) {
+					GpuOcclusionDrawSelection selection;
+					selection.commands = consumer.candidate_commands;
+					selection.byte_offset = uint32_t(consumer.candidate_command_byte_offset);
+					gpu_occlusion_selection.insert(static_cast<RendererSceneCull *>(RSG::scene)->instance_get_render_geometry_instance(consumer.instance), selection);
+				}
+			}
+			render_list_params.gpu_occlusion_draw_early = false;
+			render_list_params.gpu_occlusion_selection = &gpu_occlusion_selection;
+			_render_list_with_draw_list(&render_list_params, depth_framebuffer, RD::DRAW_DEFAULT_ALL, Vector<Color>(), 0.0f, 0u, p_render_data->render_region);
+			if (submission_failed) {
+				gpu_occlusion->set_outcome("remaining_depth_submission_failed");
+				gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+				RD::get_singleton()->draw_command_end_label();
+				return;
+			}
+		} else {
+			_render_list_with_draw_list(&render_list_params, depth_framebuffer, RD::DrawFlags(needs_pre_resolve ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_ALL), depth_pass_clear, 0.0f, 0u, p_render_data->render_region);
+		}
 
 		RD::get_singleton()->draw_command_end_label();
 
@@ -2355,7 +2683,18 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			RID opaque_framebuffer = using_motion_pass ? rb_data->get_color_pass_fb(opaque_color_pass_flags) : color_framebuffer;
 			RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_OPAQUE].elements.size(), reverse_cull, PASS_MODE_COLOR, opaque_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization, motion_vectors_required);
 			render_list_params.allow_counted_instances = allow_counted_instances;
+			bool submission_failed = false;
+			if (gpu_occlusion_split) {
+				render_list_params.gpu_occlusion_selection = &gpu_occlusion_selection;
+				render_list_params.gpu_occlusion_submission_failed = &submission_failed;
+			}
 			_render_list_with_draw_list(&render_list_params, opaque_framebuffer, RD::DrawFlags(load_color ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_COLOR_ALL) | (depth_pre_pass ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_DEPTH), c, 0.0f, 0u, p_render_data->render_region);
+			if (submission_failed) {
+				gpu_occlusion->set_outcome("color_submission_failed");
+				gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+				RD::get_singleton()->draw_command_end_label();
+				return;
+			}
 		}
 
 		RD::get_singleton()->draw_command_end_label();
@@ -4257,7 +4596,18 @@ uint32_t RenderForwardClustered::sdfgi_get_pending_region_cascade(const Ref<Rend
 	return sdfgi->get_pending_region_data(p_region, from, size, bounds);
 }
 
+void RenderForwardClustered::_gpu_occlusion_mark_metadata_changed(GeometryInstanceForwardClustered *p_instance) {
+	// Never reuse a revision after a base/cache/owner allocation is replaced.
+	// Zero permanently fails validation if this renderer exhausts its serial.
+	if (gpu_occlusion_signature_counter == UINT64_MAX) {
+		p_instance->gpu_occlusion_signature = 0;
+		return;
+	}
+	p_instance->gpu_occlusion_signature = ++gpu_occlusion_signature_counter;
+}
+
 void RenderForwardClustered::GeometryInstanceForwardClustered::_mark_dirty() {
+	RenderForwardClustered::get_singleton()->_gpu_occlusion_mark_metadata_changed(this);
 	if (dirty_list_element.in_list()) {
 		return;
 	}
@@ -5079,6 +5429,9 @@ RenderGeometryInstance *RenderForwardClustered::geometry_instance_create(RID p_b
 }
 
 void RenderForwardClustered::GeometryInstanceForwardClustered::set_transform(const Transform3D &p_transform, const AABB &p_aabb, const AABB &p_transformed_aabb) {
+	if (transform != p_transform || data->aabb != p_aabb || transformed_aabb != p_transformed_aabb) {
+		RenderForwardClustered::get_singleton()->_gpu_occlusion_mark_metadata_changed(this);
+	}
 	uint64_t frame = RSG::rasterizer->get_frame_number();
 	if (frame != prev_transform_change_frame) {
 		prev_transform = transform;
@@ -5123,6 +5476,7 @@ void RenderForwardClustered::GeometryInstanceForwardClustered::set_lightmap_capt
 void RenderForwardClustered::geometry_instance_free(RenderGeometryInstance *p_geometry_instance) {
 	GeometryInstanceForwardClustered *ginstance = static_cast<GeometryInstanceForwardClustered *>(p_geometry_instance);
 	ERR_FAIL_NULL(ginstance);
+	_gpu_occlusion_mark_metadata_changed(ginstance);
 	if (ginstance->lightmap_sh != nullptr) {
 		geometry_instance_lightmap_sh.free(ginstance->lightmap_sh);
 	}

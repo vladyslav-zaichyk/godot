@@ -4273,12 +4273,38 @@
 				Using this can result in significant optimization, especially on lower-end devices. However, it comes at the cost of having to manage your viewports manually. For further optimization, see [method viewport_set_render_direct_to_screen].
 			</description>
 		</method>
+		<method name="viewport_clear_gpu_occlusion_prepass">
+			<return type="int" enum="Error" />
+			<param index="0" name="viewport" type="RID" />
+			<description>
+				Disables the experimental GPU occlusion prepass and removes its consumer registrations. Caller buffers and persistent MultiMesh attachments remain caller-owned. Epoch and configuration identities are not reused. Returns [constant ERR_BUSY] during viewport recording; a failed operation preserves the previous state. Detaching metadata is not a GPU fence.
+			</description>
+		</method>
+		<method name="viewport_configure_gpu_occlusion_prepass">
+			<return type="int" enum="Error" />
+			<param index="0" name="viewport" type="RID" />
+			<param index="1" name="occluder_layer_mask" type="int" />
+			<param index="2" name="producer" type="Callable" />
+			<description>
+				Configures the experimental current-frame occluder-depth boundary. Only Windows x64 Vulkan Forward+ with one opted viewport, one view and the supported opaque orthographic configuration is admitted. Unsupported view or render settings select the persistent fallback; this API does not qualify a general occlusion renderer. A zero layer mask is allowed and contributes clear depth.
+				The synchronous [param producer] receives a temporary [RenderGpuOcclusionContext] after eligible native occluder depth and before remaining depth. It must return a [Dictionary] containing exact integer [code]epoch[/code], [code]configuration_generation[/code] and [code]error[/code] values matching the context and [constant OK]. Wrong types, stale identity, callback failure or invalidated resources prevent candidate selection. Completion is CPU recording completion, not a GPU fence.
+				Use only the supplied compute-list token and supported checked compute operations. Do not begin/end lists, draw, submit, synchronize, read back, free resources, mutate the scene or retain context/depth/token. There is at most one callback per actual opted viewport render. The caller owns conservative Hi-Z, current bounds, bounded compaction and legal fallback command contents. No visibility result is read back by this API.
+				Configuration is transactional. Invalid metadata returns [constant ERR_INVALID_PARAMETER], unsupported configuration [constant ERR_UNAVAILABLE], a second opted viewport [constant ERR_ALREADY_IN_USE], and mutation during recording [constant ERR_BUSY]. Reconfiguration preserves existing registrations and changes their configuration generation.
+			</description>
+		</method>
 		<method name="viewport_create">
 			<return type="RID" />
 			<description>
 				Creates an empty viewport and adds it to the RenderingServer. It can be accessed with the RID that is returned. This RID will be used in all [code]viewport_*[/code] RenderingServer functions.
 				Once finished with your RID, you will want to free the RID using the RenderingServer's [method free_rid] method.
 				[b]Note:[/b] The equivalent node is [Viewport].
+			</description>
+		</method>
+		<method name="viewport_get_gpu_occlusion_prepass_outcome" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="viewport" type="RID" />
+			<description>
+				Returns a copy of the latest bounded recording outcome: integer [code]epoch[/code] and [code]configuration_generation[/code], boolean [code]selected[/code], string [code]mode[/code] and string [code]reason[/code]. An unconfigured or invalid viewport may return an empty dictionary. The outcome certifies recording decisions only, not GPU completion, visibility correctness or performance. A valid fallback is required even when selection fails.
 			</description>
 		</method>
 		<method name="viewport_get_measured_render_time_cpu" qualifiers="const">
@@ -4340,6 +4366,22 @@
 			<description>
 				Returns the viewport's update mode.
 				[b]Warning:[/b] Calling this from any thread other than the rendering thread will be detrimental to performance.
+			</description>
+		</method>
+		<method name="viewport_register_gpu_occlusion_consumer">
+			<return type="int" enum="Error" />
+			<param index="0" name="viewport" type="RID" />
+			<param index="1" name="geometry_instance" type="RID" />
+			<param index="2" name="identity_bank" type="RID" />
+			<param index="3" name="candidate_identity_base" type="int" />
+			<param index="4" name="candidate_commands" type="RID" />
+			<param index="5" name="candidate_command_byte_offset" type="int" />
+			<param index="6" name="logical_slot_capacity" type="int" />
+			<description>
+				Registers or transactionally replaces one live RenderingServer INSTANCE RID in the viewport's scenario, with a supported shader-driven indexed MultiMesh and one fixed LOOP fallback command. At most 64 owners are registered. Mesh, effective materials, owner transform and buffer bindings must remain immutable until unregistering; recording revalidates the captured resources and renderer revision.
+				For capacity [code]N[/code] and candidate base [code]C[/code], the declared identity bank stores immutable uncull identities in [code][0,N)[/code] and candidate identities in [code][C,C+N)[/code]. Require [code]N &gt; 0[/code], [code]C &gt;= N[/code] and [code]C+N[/code] within the owner's signed-32-bit draw-slot capacity. The identity bank must be live nonpersistent global-RD storage, bound to the effective BufferRD material. Metadata cannot prove shader semantics or GPU payloads. The caller guarantees safe current active/group checks before pose loads and a complete fresh fallback for every addressed slot.
+				Candidate commands are one aligned 20-byte indexed indirect command in live nonpersistent global-RD INDIRECT storage. Candidate ID and command regions must not overlap other writers or fallback regions. Command banks cannot alias any registered shader storage. Immutable fallback regions may be shared. All signed numeric inputs are checked before narrowing. A rejected registration preserves the old binding.
+				Caller resources remain borrowed and must stay live through all recorded uses. Unregistering or callback return does not retire GPU work. The engine does not read payloads or allocate per-instance storage. Candidate selection is render-local and never replaces the persistent fallback attachment.
 			</description>
 		</method>
 		<method name="viewport_remove_canvas">
@@ -4701,6 +4743,14 @@
 			<description>
 				Sets the update mode for Variable Rate Shading (VRS) for the viewport. VRS requires the input texture to be converted to the format usable by the VRS method supported by the hardware. The update mode defines how often this happens. If the GPU does not support VRS, or VRS is not enabled, this property is ignored.
 				If set to [constant RenderingServer.VIEWPORT_VRS_UPDATE_ONCE], the input texture is copied once and the mode is changed to [constant RenderingServer.VIEWPORT_VRS_UPDATE_DISABLED].
+			</description>
+		</method>
+		<method name="viewport_unregister_gpu_occlusion_consumer">
+			<return type="int" enum="Error" />
+			<param index="0" name="viewport" type="RID" />
+			<param index="1" name="geometry_instance" type="RID" />
+			<description>
+				Removes one registered owner and advances the configuration generation. Returns [constant ERR_INVALID_PARAMETER] if the owner is not registered, or [constant ERR_BUSY] during recording. Does not free borrowed buffers, alter the persistent fallback or wait for recorded GPU work.
 			</description>
 		</method>
 		<method name="visibility_notifier_create">

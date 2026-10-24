@@ -66,6 +66,7 @@ public:
 		RID render_target;
 		RID render_target_texture;
 		Ref<RenderSceneBuffers> render_buffers;
+		Ref<GpuOcclusionPrepassState> gpu_occlusion_prepass_state;
 
 		RSE::ViewportMSAA msaa_2d = RSE::VIEWPORT_MSAA_DISABLED;
 		RSE::ViewportMSAA msaa_3d = RSE::VIEWPORT_MSAA_DISABLED;
@@ -203,6 +204,7 @@ public:
 	int num_viewports_with_motion_vectors = 0;
 
 private:
+	RID gpu_occlusion_viewport;
 	Vector<Viewport *> _sort_active_viewports();
 	void _viewport_set_size(Viewport *p_viewport, int p_width, int p_height, uint32_t p_view_count);
 	bool _viewport_requires_motion_vectors(Viewport *p_viewport);
@@ -217,6 +219,14 @@ private:
 	void _resize_occlusion_culling_buffer(const Size2i &p_size);
 
 public:
+	Error viewport_configure_gpu_occlusion_prepass(RID p_viewport, uint32_t p_occluder_layer_mask, const Callable &p_producer);
+	Error viewport_register_gpu_occlusion_consumer(RID p_viewport, RID p_geometry_instance, RID p_identity_bank, int64_t p_candidate_identity_base, RID p_candidate_commands, int64_t p_candidate_command_byte_offset, int64_t p_logical_slot_capacity);
+	Error viewport_unregister_gpu_occlusion_consumer(RID p_viewport, RID p_geometry_instance);
+	Error viewport_clear_gpu_occlusion_prepass(RID p_viewport);
+	Dictionary viewport_get_gpu_occlusion_prepass_outcome(RID p_viewport) const;
+	Ref<GpuOcclusionPrepassState> viewport_get_gpu_occlusion_prepass_state(RID p_viewport) const;
+	bool is_gpu_occlusion_recording() const;
+	bool reject_gpu_occlusion_free();
 	RID viewport_allocate();
 	void viewport_initialize(RID p_rid);
 

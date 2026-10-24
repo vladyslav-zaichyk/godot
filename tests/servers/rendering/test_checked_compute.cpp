@@ -43,6 +43,15 @@ namespace TestCheckedCompute {
 static_assert(std::is_same_v<decltype(&RenderingDevice::compute_list_dispatch_indirect_checked), Error (RenderingDevice::*)(RenderingDevice::ComputeListID, RID, int64_t)>);
 static_assert(std::is_same_v<decltype(&RenderingDevice::compute_list_dispatch_checked), Error (RenderingDevice::*)(RenderingDevice::ComputeListID, uint32_t, uint32_t, uint32_t)>);
 static_assert(std::is_same_v<decltype(&RenderingDevice::compute_list_bind_uniform_set_checked), Error (RenderingDevice::*)(RenderingDevice::ComputeListID, RID, uint32_t)>);
+static_assert(std::is_same_v<decltype(&RenderingDevice::compute_list_begin_callback_scope), RenderingDevice::ComputeListID (RenderingDevice::*)()>);
+static_assert(std::is_same_v<decltype(&RenderingDevice::compute_list_end_callback_scope), bool (RenderingDevice::*)()>);
+
+TEST_CASE("[SceneTree][Rendering][IndirectDraw][GPUOcclusion] Script callbacks cannot acquire or release native callback scopes") {
+	CHECK(ClassDB::get_method("RenderingDevice", "compute_list_begin_callback_scope") == nullptr);
+	CHECK(ClassDB::get_method("RenderingDevice", "compute_list_end_callback_scope") == nullptr);
+	CHECK(ClassDB::get_method("RenderingDevice", "compute_callback_reject_operation") == nullptr);
+	CHECK(ClassDB::get_method("RenderingDevice", "storage_buffer_is_nonpersistent") == nullptr);
+}
 
 TEST_CASE("[Rendering][IndirectDraw][CheckedCompute] Compute alias preflight is const and leaves new or recorded trackers unchanged") {
 	RenderingDeviceGraph graph;

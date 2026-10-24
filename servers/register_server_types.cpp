@@ -62,6 +62,7 @@
 #include "servers/display/native_menu.h"
 #include "servers/movie_writer/movie_writer.h"
 #include "servers/movie_writer/movie_writer_pngwav.h"
+#include "servers/rendering/gpu_occlusion_prepass.h"
 #include "servers/rendering/renderer_rd/framebuffer_cache_rd.h"
 #include "servers/rendering/renderer_rd/storage_rd/render_data_rd.h"
 #include "servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.h"
@@ -253,6 +254,7 @@ void register_server_types() {
 	GDREGISTER_ABSTRACT_CLASS(RenderData);
 	GDREGISTER_CLASS(RenderDataExtension);
 	GDREGISTER_CLASS(RenderDataRD);
+	GDREGISTER_CLASS(RenderGpuOcclusionContext);
 
 	GDREGISTER_ABSTRACT_CLASS(RenderSceneData);
 	GDREGISTER_CLASS(RenderSceneDataExtension);
