@@ -1,0 +1,18 @@
+{
+  "direct": [
+    "shader_pending_commands", "shader_pending_counter",
+    "shader_recorded_commands", "shader_recorded_counter",
+    "shader_after_commands", "shader_after_counter",
+    "zero_shader_after_commands", "zero_shader_after_counter",
+    "failed_count_transaction", "list_end_clear_commands", "list_end_clear_counter",
+    "repeated_lists", "persistent_commands", "persistent_counter",
+    "wrong_device_commands", "wrong_device_counter",
+    "subpass_retention_commands", "subpass_retention_counter"
+  ],
+  "native": [
+    "native_self_command_alias_recovery", "native_self_counter_alias_recovery",
+    "native_checked_command_bind_recovery", "native_checked_counter_bind_recovery",
+    "native_material_replacement", "native_count_k_zero_one",
+    "native_borrower_lifecycle", "native_buffer_plateau"
+  ]
+}

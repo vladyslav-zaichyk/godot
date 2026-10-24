@@ -1,0 +1,14 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0,std430) buffer CommandsA { uint words[]; } commands_a;
+layout(set=0,binding=1,std430) buffer CounterA { uint words[]; } counter_a;
+layout(set=0,binding=2,std430) buffer CommandsB { uint words[]; } commands_b;
+layout(set=0,binding=3,std430) buffer CounterB { uint words[]; } counter_b;
+layout(push_constant,std430) uniform Parameters { uint count; uint unused0; uint unused1; uint unused2; } pc;
+void main() {
+    // Exactly one invocation: bounded writes and final publication have no workgroup reset race.
+    commands_a.words[0]=6u; commands_a.words[1]=1u; commands_a.words[2]=0u; commands_a.words[3]=0u; commands_a.words[4]=0u;
+    commands_b.words[0]=6u; commands_b.words[1]=1u; commands_b.words[2]=0u; commands_b.words[3]=0u; commands_b.words[4]=0u;
+    counter_a.words[0]=pc.count;
+    counter_b.words[0]=pc.count;
+}
