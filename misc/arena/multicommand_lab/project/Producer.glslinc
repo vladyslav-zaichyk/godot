@@ -1,0 +1,33 @@
+#version 450
+layout(local_size_x = 64) in;
+layout(set=0,binding=0,std430) buffer Ids { uint ids[]; };
+layout(set=0,binding=1,std430) buffer Commands { uint commands[]; };
+layout(set=0,binding=2,std430) readonly buffer Metadata { uvec4 metadata[]; };
+layout(push_constant,std430) uniform Parameters { uint record_count; uint phase; uint segments; uint units; } pc;
+
+bool admitted(uint segment) {
+    return pc.phase != 3u && (pc.phase != 1u || (segment & 1u) == 0u || segment + 1u == pc.segments);
+}
+
+void main() {
+    uint record = gl_GlobalInvocationID.x;
+    if (record >= pc.record_count) return;
+    uvec4 a = metadata[record * 4u];
+    uvec4 b = metadata[record * 4u + 1u];
+    uvec4 c = metadata[record * 4u + 2u];
+    uvec4 d = metadata[record * 4u + 3u];
+    uint word = pc.phase == 2u ? c.z + (c.w - 1u - d.x) * d.y : a.x;
+    uint visible = 0u;
+    for (uint segment = b.x; segment < b.x + b.y; ++segment) {
+        if (!admitted(segment)) continue;
+        for (uint unit = 0u; unit < pc.units; ++unit) {
+            ids[a.y + a.z + visible] = (a.w * pc.segments + segment) * pc.units + unit;
+            ++visible;
+        }
+    }
+    commands[word] = b.w;
+    commands[word + 1u] = visible;
+    commands[word + 2u] = b.z;
+    commands[word + 3u] = c.x;
+    commands[word + 4u] = a.z;
+}

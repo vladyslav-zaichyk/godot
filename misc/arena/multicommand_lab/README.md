@@ -260,6 +260,60 @@ workload requires it. A serial correctness-only fixture compactor is not the
 optimized production C0; qualify that producer before using it for performance
 acceptance. No E9 FPS or memory result is claimed by this document.
 
+## Bundled numerical consumer
+
+`run_contract.py` defaults to compile-only. It requires one exact E9 editor,
+adjacent GodotSharp tree, local NuGet feed, SDK version and full native source SHA.
+It stages only seven project inputs into one fresh external output, isolates
+NuGet/temp/user data, verifies Debug runtime and Release package API identities,
+and never launches Godot unless `--run-gpu` is explicitly supplied.
+
+```powershell
+python -B misc/arena/multicommand_lab/run_contract.py `
+  --engine D:/Bundles/E9/godot.windows.editor.x86_64.arena_dev.mono.exe `
+  --sdk-feed D:/Bundles/E9/NuGetFeed --sdk-version <exact-E9-version> `
+  --engine-hash <full-native-SHA> --output D:/CodexScratch/e9-compile-01 `
+  --compile-only
+```
+
+Default inputs are 32 procedural archetypes, four LOD variants, 16 independently
+produced segments and four bodies per segment (8192 bodies). Arguments bound the
+population to one million and each owner to at most 1024 commands. This is not
+an animated game crowd or an FPS benchmark. Data-only identity/color differences
+stand in for behavior; no gameplay, simulation or networking is implemented.
+
+After the renderer A/B owner releases the GPU, use a fresh output and `--run-gpu`.
+Run `--layout separate` and `--layout packed` as separate experiments. Separate
+uses one mesh owner per archetype/LOD. Packed puts the immutable procedural shape
+ranges in a common indexed surface and uses one C1/C2 owner per archetype; those
+commands vary firstIndex/vertexOffset. C0 retains one command/owner per shape,
+including in the packed experiment. Its different topology and serial producer
+are disclosed rather than credited to batching alone.
+
+For distinct segment counts 1/default, both strides 20/32 and C0/C1/C2, four
+phases cover all visible, interior empty segments, reversed command order and
+all-empty output. The consumer reads every command/ID, including prefix/padding,
+the final record, sparse firstInstance ranges, duplicate/missing IDs and guard
+slots. C1/C2 compare complete ID/command/raster hashes. Up to three distinct
+identity pixel probes per phase independently check expected admission/color;
+no screenshot or image artifact is saved. These are partial raster probes,
+not a numerical proof for every rendered identity.
+
+Fourteen quiet invalid/narrowing/range cases preserve complete view metadata,
+history false and absence of a transform pool. Successful old-API rebind resets
+count/stride/mode. Case teardown hides consumers, clears bindings, uses native
+deferred resource destruction and checks caller-owned storage is still valid.
+Frame drainage is not asserted to be a GPU fence. Owned logical byte endpoints
+do not qualify a sustained allocation plateau or physical VRAM.
+
+The runner checks exact case/rebind/phase identities, independently predicted
+owner/command/call counts, numerical sampling totals, source/SDK/runtime assembly
+identities and shutdown diagnostics. Predicted RD calls are source metadata,
+not measured GPU instrumentation. Readbacks serialize the correctness subset.
+Compile-only reports `compiled=true, gpu_executed=false, passed=null`; a numerical
+PASS still leaves motion vectors/E8, shadows, auxiliary passes, temporal quality,
+whole-workload lifetime and performance unqualified.
+
 ## Sources
 
 - [Godot RenderingDevice API](https://docs.godotengine.org/en/stable/classes/class_renderingdevice.html#class-renderingdevice-method-draw-list-draw-indirect).

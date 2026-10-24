@@ -50,7 +50,7 @@ a new MultiMesh range description and submission branch, not a new render graph,
 shader stable-ID builtin or animation cache. It still shares the owner,
 bindings, bounds, light state and push constants across all commands.
 
-RD currently validates only `offset+20` or `offset+16`, with 32-bit addition,
+At the pinned pre-E9 reference, RD validates only `offset+20` or `offset+16`, with 32-bit addition,
 after descriptor preparation/binding. It does not validate the final command,
 full-span arithmetic, aligned stride or enabled multidraw maximum. Vulkan
 conditionally enables multiDrawIndirect, while the driver interface lacks the
@@ -64,23 +64,26 @@ does not depend on increasing the crowd's group count, and it has no FPS claim.
 
 ## Decision and next work
 
-**Defer the native E9 batching implementation for the audited current renderer.**
-The API opportunity is real, but no same-state segmented workload or measured
-submission bottleneck has been established. Do not atlas distinct LOD geometry,
-change materials/visibility or add artificial partitions just to justify it.
+**The audited current renderer has no demonstrated E9 performance benefit.**
+The author has authorized a bounded prototype for the future workload: many
+archetypes, LODs and independent spatial segments. That is an engineering
+experiment; production integration still requires a real compatible workload and
+cost breakdown. Different behavior can remain shader data. Compatible models
+packed into common geometry buffers form a separate representation experiment.
 
-Keep the [proposed contract](README.md) ready for a future compatible-bucket use
-case. Reopen implementation when the renderer owner supplies actual compatible
-command counts, segmentation requirements and a cost breakdown. Compare both
-LOOP/MULTI_DRAW in one binary with identical owners/data, and retain the globally
-compacted single-command control including its producer cost. A synthetic
-LOOP-to-batch win cannot establish improvement over the current eight-group path.
+The [current contract](README.md) and bundled procedural consumer distinguish
+these experiments. Compare LOOP/MULTI_DRAW in one binary with identical
+owners/data, and retain the best globally compacted single-command control
+including its producer cost. The small fixture's serial C0 compactor is a
+correctness reference, not a qualified optimized production producer. Packed C0
+also has a different owner layout. Report those comparisons separately.
 
-Recommended next native work is E9a, reviewed and built separately if taken into
-implementation. Full E9 remains conditional; shader/cache/compaction algorithms
-remain with the renderer agent. Five existing editor/SDK packages are immutable.
-This phase changes documentation only, creates no extra worktree or disposable
-project copy, and starts no build, editor or GPU test.
+E9a is implemented as an independent source patch; E9 adds the bounded native
+consumer. Matching builds/managed compilation, numerical Vulkan correctness,
+lifetime and performance are separate gates. No result is inherited from source
+review or this pre-implementation audit. Five existing editor/SDK packages stay
+immutable. The initial audit itself did not build or execute the engine; the
+subsequent implementation has its own source, build and cleanup receipts.
 
 ## Pinned engine references
 
