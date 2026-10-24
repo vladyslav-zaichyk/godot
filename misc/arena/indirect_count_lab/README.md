@@ -30,6 +30,11 @@ E10a implements the RD stage and the small source consumer. E10b remains a
 proposal: there is no counted MultiMesh attachment in this candidate.
 Adoption requires applicable R14/future-workload measurements.
 
+The detailed [E10b MultiMesh GPU count contract](E10B_CONTRACT.md) defines the
+next patch, including transactional counter attachment, checked native bindings,
+explicit main-view pass routing and separate numerical/performance gates.
+It is a design contract; the E10a build and API remain unchanged.
+
 ## Proposed API and scope
 
 The RD signature is implemented; the RenderingServer signature below is the
