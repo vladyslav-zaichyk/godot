@@ -925,6 +925,7 @@ public:
 	void add_compute_list_dispatch_indirect(RDD::BufferID p_buffer, uint32_t p_offset);
 	void add_compute_list_set_push_constant(RDD::ShaderID p_shader, const void *p_data, uint32_t p_data_size);
 	void add_compute_list_uniform_set_prepare_for_use(RDD::ShaderID p_shader, RDD::UniformSetID p_uniform_set, uint32_t set_index);
+	bool is_compute_list_usage_compatible(const ResourceTracker *p_tracker, ResourceUsage p_usage) const;
 	void add_compute_list_usage(ResourceTracker *p_tracker, ResourceUsage p_usage);
 	void add_compute_list_usages(VectorView<ResourceTracker *> p_trackers, VectorView<ResourceUsage> p_usages);
 	void add_compute_list_end();

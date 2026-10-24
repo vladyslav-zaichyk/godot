@@ -173,6 +173,15 @@
 				Binds the [param uniform_set] to this [param compute_list]. Godot ensures that all textures in the uniform set have the correct Vulkan access masks. If Godot had to change access masks of textures, it will raise a Vulkan image memory barrier.
 			</description>
 		</method>
+		<method name="compute_list_bind_uniform_set_checked">
+			<return type="int" enum="Error" />
+			<param index="0" name="compute_list" type="int" />
+			<param index="1" name="uniform_set" type="RID" />
+			<param index="2" name="set_index" type="int" />
+			<description>
+				Binds a uniform set with the same valid behavior as [method compute_list_bind_uniform_set]. Returns [constant @GlobalScope.ERR_INVALID_PARAMETER] without logging for invalid list, index, RID, or a shader resource alias of a reserved indirect argument buffer. Rejection preserves the previous pending binding. Correct render-thread use is required; thread violations retain native diagnostics.
+			</description>
+		</method>
 		<method name="compute_list_dispatch">
 			<return type="void" />
 			<param index="0" name="compute_list" type="int" />
@@ -183,6 +192,16 @@
 				Submits the compute list for processing on the GPU. This is the compute equivalent to [method draw_list_draw].
 			</description>
 		</method>
+		<method name="compute_list_dispatch_checked">
+			<return type="int" enum="Error" />
+			<param index="0" name="compute_list" type="int" />
+			<param index="1" name="x_groups" type="int" />
+			<param index="2" name="y_groups" type="int" />
+			<param index="3" name="z_groups" type="int" />
+			<description>
+				Dispatches compute work with the same valid behavior as [method compute_list_dispatch]. Returns [constant @GlobalScope.ERR_INVALID_PARAMETER] without logging for invalid list, nonpositive or excessive group counts, pipeline, required descriptor/push-constant state, or shader aliases of reserved indirect argument buffers. Rejection occurs before descriptor or graph mutation. Correct render-thread use is required.
+			</description>
+		</method>
 		<method name="compute_list_dispatch_indirect">
 			<return type="void" />
 			<param index="0" name="compute_list" type="int" />
@@ -190,6 +209,15 @@
 			<param index="2" name="offset" type="int" />
 			<description>
 				Submits the compute list for processing on the GPU with the given group counts stored in the [param buffer] at [param offset]. Buffer must have been created with [constant STORAGE_BUFFER_USAGE_DISPATCH_INDIRECT] flag.
+			</description>
+		</method>
+		<method name="compute_list_dispatch_indirect_checked">
+			<return type="int" enum="Error" />
+			<param index="0" name="compute_list" type="int" />
+			<param index="1" name="buffer" type="RID" />
+			<param index="2" name="offset" type="int" />
+			<description>
+				Dispatches using three GPU-owned group counts at signed64 [param offset]. Requires a nonpersistent storage buffer owned by this RenderingDevice with [constant STORAGE_BUFFER_USAGE_DISPATCH_INDIRECT], four-byte alignment, and a complete twelve-byte command within the buffer. The offset must be nonnegative and fit uint32 before narrowing. Returns [constant @GlobalScope.ERR_INVALID_PARAMETER] without logging for invalid arguments, pipeline/descriptors, or mixed shader/indirect use in this compute segment. On success, the whole argument buffer is reserved against shader aliases until list end or [method compute_list_add_barrier]; repeated indirect reads are allowed. A barrier restores descriptor bindings, which must be replaced when they still alias the arguments. GPU group counts remain the caller's responsibility and are not read or clamped. Rejection changes no reservation, descriptor, or graph state. Correct render-thread use and live caller-owned resources are required.
 			</description>
 		</method>
 		<method name="compute_list_end">

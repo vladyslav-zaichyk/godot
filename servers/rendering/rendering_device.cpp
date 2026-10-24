@@ -6901,13 +6901,15 @@ void RenderingDevice::compute_list_bind_compute_pipeline(ComputeListID p_list, R
 			compute_list.state.sets[i].pipeline_expected_format = pformats[i];
 		}
 
-		for (uint32_t i = pcount; i < compute_list.state.set_count; i++) {
-			// Unbind the ones above (not used) if exist.
+		for (uint32_t i = pcount; i < MAX_UNIFORM_SETS; i++) {
+			// Higher slots can remain staged, but this pipeline does not use them.
 			compute_list.state.sets[i].bound = false;
+			compute_list.state.sets[i].pipeline_expected_format = 0;
 		}
 
 		compute_list.state.set_count = pcount; // Update set count.
 
+		compute_list.state.push_constant_supplied = false;
 		if (pipeline->push_constant_size) {
 #ifdef DEBUG_ENABLED
 			compute_list.validation.pipeline_push_constant_supplied = false;
@@ -6930,42 +6932,65 @@ void RenderingDevice::compute_list_bind_compute_pipeline(ComputeListID p_list, R
 }
 
 void RenderingDevice::compute_list_bind_uniform_set(ComputeListID p_list, RID p_uniform_set, uint32_t p_index) {
-	ERR_RENDER_THREAD_GUARD();
+	const Error error = compute_list_bind_uniform_set_checked(p_list, p_uniform_set, p_index);
+	ERR_FAIL_COND_MSG(error != OK, "Compute uniform set was rejected: invalid list, index, RID or indirect argument alias.");
+}
 
-	ERR_FAIL_COND(p_list != ID_TYPE_COMPUTE_LIST);
-	ERR_FAIL_COND(!compute_list.active);
-
-#ifdef DEBUG_ENABLED
-	ERR_FAIL_COND_MSG(p_index >= driver->limit_get(LIMIT_MAX_BOUND_UNIFORM_SETS) || p_index >= MAX_UNIFORM_SETS,
-			"Attempting to bind a descriptor set (" + itos(p_index) + ") greater than what the hardware supports (" + itos(driver->limit_get(LIMIT_MAX_BOUND_UNIFORM_SETS)) + ").");
-#endif
-
-	UniformSet *uniform_set = uniform_set_owner.get_or_null(p_uniform_set);
-	ERR_FAIL_NULL(uniform_set);
-
-	if (p_index > compute_list.state.set_count) {
-		compute_list.state.set_count = p_index;
+bool RenderingDevice::_compute_list_uniform_set_has_indirect_alias(const UniformSet *p_uniform_set) const {
+	if (compute_list.indirect_trackers.is_empty()) {
+		return false;
 	}
+	for (RDG::ResourceTracker *tracker : p_uniform_set->draw_trackers) {
+		if (compute_list.indirect_trackers.has(tracker)) {
+			return true;
+		}
+	}
+	return false;
+}
 
-	compute_list.state.sets[p_index].uniform_set_driver_id = uniform_set->driver_id; // Update set pointer.
-	compute_list.state.sets[p_index].bound = false; // Needs rebind.
-	compute_list.state.sets[p_index].uniform_set_format = uniform_set->format;
-	compute_list.state.sets[p_index].uniform_set = p_uniform_set;
-
-#if 0
-	{ // Validate that textures bound are not attached as framebuffer bindings.
-		uint32_t attachable_count = uniform_set->attachable_textures.size();
-		const RID *attachable_ptr = uniform_set->attachable_textures.ptr();
-		uint32_t bound_count = draw_list_bound_textures.size();
-		const RID *bound_ptr = draw_list_bound_textures.ptr();
-		for (uint32_t i = 0; i < attachable_count; i++) {
-			for (uint32_t j = 0; j < bound_count; j++) {
-				ERR_FAIL_COND_MSG(attachable_ptr[i] == bound_ptr[j],
-						"Attempted to use the same texture in framebuffer attachment and a uniform set, this is not allowed.");
+Error RenderingDevice::_compute_list_validate_uniform_sets(const Buffer *p_arguments) {
+	const ComputePipeline *pipeline = compute_pipeline_owner.get_or_null(compute_list.state.pipeline);
+	if (pipeline == nullptr || (pipeline->push_constant_size > 0 &&
+			(!compute_list.state.push_constant_supplied || compute_list.state.push_constant_size != pipeline->push_constant_size))) {
+		return ERR_INVALID_PARAMETER;
+	}
+	for (uint32_t i = 0; i < compute_list.state.set_count; i++) {
+		if (compute_list.state.sets[i].pipeline_expected_format == 0) {
+			continue;
+		}
+		const UniformSet *uniform_set = uniform_set_owner.get_or_null(compute_list.state.sets[i].uniform_set);
+		if (uniform_set == nullptr || uniform_set->format != compute_list.state.sets[i].pipeline_expected_format ||
+				_compute_list_uniform_set_has_indirect_alias(uniform_set)) {
+			return ERR_INVALID_PARAMETER;
+		}
+		if (p_arguments != nullptr) {
+			for (RDG::ResourceTracker *tracker : uniform_set->draw_trackers) {
+				if (tracker == p_arguments->draw_tracker) {
+					return ERR_INVALID_PARAMETER;
+				}
 			}
 		}
 	}
-#endif
+	return OK;
+}
+
+Error RenderingDevice::compute_list_bind_uniform_set_checked(ComputeListID p_list, RID p_uniform_set, uint32_t p_index) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+	if (p_list != ID_TYPE_COMPUTE_LIST || !compute_list.active ||
+			p_index >= MAX_UNIFORM_SETS || p_index >= driver->limit_get(LIMIT_MAX_BOUND_UNIFORM_SETS)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const UniformSet *uniform_set = uniform_set_owner.get_or_null(p_uniform_set);
+	if (uniform_set == nullptr || _compute_list_uniform_set_has_indirect_alias(uniform_set)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	// Complete validation before replacing any pending descriptor state.
+	compute_list.state.set_count = MAX(compute_list.state.set_count, p_index + 1);
+	compute_list.state.sets[p_index].uniform_set_driver_id = uniform_set->driver_id;
+	compute_list.state.sets[p_index].bound = false;
+	compute_list.state.sets[p_index].uniform_set_format = uniform_set->format;
+	compute_list.state.sets[p_index].uniform_set = p_uniform_set;
+	return OK;
 }
 
 void RenderingDevice::compute_list_set_push_constant(ComputeListID p_list, const void *p_data, uint32_t p_data_size) {
@@ -6985,6 +7010,7 @@ void RenderingDevice::compute_list_set_push_constant(ComputeListID p_list, const
 	// Store it in the state in case we need to restart the compute list.
 	memcpy(compute_list.state.push_constant_data, p_data, p_data_size);
 	compute_list.state.push_constant_size = p_data_size;
+	compute_list.state.push_constant_supplied = true;
 
 #ifdef DEBUG_ENABLED
 	compute_list.validation.pipeline_push_constant_supplied = true;
@@ -6992,54 +7018,21 @@ void RenderingDevice::compute_list_set_push_constant(ComputeListID p_list, const
 }
 
 void RenderingDevice::compute_list_dispatch(ComputeListID p_list, uint32_t p_x_groups, uint32_t p_y_groups, uint32_t p_z_groups) {
-	ERR_RENDER_THREAD_GUARD();
+	const Error error = compute_list_dispatch_checked(p_list, p_x_groups, p_y_groups, p_z_groups);
+	ERR_FAIL_COND_MSG(error != OK, "Compute dispatch was rejected: invalid list, workgroup count, pipeline, descriptors or indirect argument alias.");
+}
 
-	ERR_FAIL_COND(p_list != ID_TYPE_COMPUTE_LIST);
-	ERR_FAIL_COND(!compute_list.active);
-
-#ifdef DEBUG_ENABLED
-	ERR_FAIL_COND_MSG(p_x_groups == 0, "Dispatch amount of X compute groups (" + itos(p_x_groups) + ") is zero.");
-	ERR_FAIL_COND_MSG(p_z_groups == 0, "Dispatch amount of Z compute groups (" + itos(p_z_groups) + ") is zero.");
-	ERR_FAIL_COND_MSG(p_y_groups == 0, "Dispatch amount of Y compute groups (" + itos(p_y_groups) + ") is zero.");
-	ERR_FAIL_COND_MSG(p_x_groups > driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_X),
-			"Dispatch amount of X compute groups (" + itos(p_x_groups) + ") is larger than device limit (" + itos(driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_X)) + ")");
-	ERR_FAIL_COND_MSG(p_y_groups > driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_Y),
-			"Dispatch amount of Y compute groups (" + itos(p_y_groups) + ") is larger than device limit (" + itos(driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_Y)) + ")");
-	ERR_FAIL_COND_MSG(p_z_groups > driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_Z),
-			"Dispatch amount of Z compute groups (" + itos(p_z_groups) + ") is larger than device limit (" + itos(driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_Z)) + ")");
-#endif
-
-#ifdef DEBUG_ENABLED
-
-	ERR_FAIL_COND_MSG(!compute_list.validation.pipeline_active, "No compute pipeline was set before attempting to draw.");
-
-	if (compute_list.validation.pipeline_push_constant_size > 0) {
-		// Using push constants, check that they were supplied.
-		ERR_FAIL_COND_MSG(!compute_list.validation.pipeline_push_constant_supplied,
-				"The shader in this pipeline requires a push constant to be set before drawing, but it's not present.");
+Error RenderingDevice::compute_list_dispatch_checked(ComputeListID p_list, uint32_t p_x_groups, uint32_t p_y_groups, uint32_t p_z_groups) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+	if (p_list != ID_TYPE_COMPUTE_LIST || !compute_list.active ||
+			p_x_groups == 0 || p_y_groups == 0 || p_z_groups == 0 ||
+			p_x_groups > driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_X) ||
+			p_y_groups > driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_Y) ||
+			p_z_groups > driver->limit_get(LIMIT_MAX_COMPUTE_WORKGROUP_COUNT_Z) ||
+			_compute_list_validate_uniform_sets() != OK) {
+		return ERR_INVALID_PARAMETER;
 	}
 
-#endif
-
-#ifdef DEBUG_ENABLED
-	for (uint32_t i = 0; i < compute_list.state.set_count; i++) {
-		if (compute_list.state.sets[i].pipeline_expected_format == 0) {
-			// Nothing expected by this pipeline.
-			continue;
-		}
-
-		if (compute_list.state.sets[i].pipeline_expected_format != compute_list.state.sets[i].uniform_set_format) {
-			if (compute_list.state.sets[i].uniform_set_format == 0) {
-				ERR_FAIL_MSG("Uniforms were never supplied for set (" + itos(i) + ") at the time of drawing, which are required by the pipeline.");
-			} else if (uniform_set_owner.owns(compute_list.state.sets[i].uniform_set)) {
-				UniformSet *us = uniform_set_owner.get_or_null(compute_list.state.sets[i].uniform_set);
-				ERR_FAIL_MSG("Uniforms supplied for set (" + itos(i) + "):\n" + _shader_uniform_debug(us->shader_id, us->shader_set) + "\nare not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n" + _shader_uniform_debug(compute_list.state.pipeline_shader));
-			} else {
-				ERR_FAIL_MSG("Uniforms supplied for set (" + itos(i) + ", which was just freed) are not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n" + _shader_uniform_debug(compute_list.state.pipeline_shader));
-			}
-		}
-	}
-#endif
 	thread_local LocalVector<RDD::UniformSetID> valid_descriptor_ids;
 	valid_descriptor_ids.clear();
 	valid_descriptor_ids.resize(compute_list.state.set_count);
@@ -7107,6 +7100,7 @@ void RenderingDevice::compute_list_dispatch(ComputeListID p_list, uint32_t p_x_g
 	}
 	draw_graph.add_compute_list_dispatch(p_x_groups, p_y_groups, p_z_groups);
 	compute_list.state.dispatch_count++;
+	return OK;
 }
 
 void RenderingDevice::compute_list_dispatch_threads(ComputeListID p_list, uint32_t p_x_threads, uint32_t p_y_threads, uint32_t p_z_threads) {
@@ -7137,50 +7131,26 @@ void RenderingDevice::compute_list_dispatch_threads(ComputeListID p_list, uint32
 }
 
 void RenderingDevice::compute_list_dispatch_indirect(ComputeListID p_list, RID p_buffer, uint32_t p_offset) {
-	ERR_RENDER_THREAD_GUARD();
+	const Error error = compute_list_dispatch_indirect_checked(p_list, p_buffer, p_offset);
+	ERR_FAIL_COND_MSG(error != OK, "Indirect compute dispatch was rejected: invalid list, arguments, pipeline, descriptors or argument alias.");
+}
 
-	ERR_FAIL_COND(p_list != ID_TYPE_COMPUTE_LIST);
-	ERR_FAIL_COND(!compute_list.active);
-
+Error RenderingDevice::compute_list_dispatch_indirect_checked(ComputeListID p_list, RID p_buffer, int64_t p_offset) {
+	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
+	if (p_list != ID_TYPE_COMPUTE_LIST || !compute_list.active) {
+		return ERR_INVALID_PARAMETER;
+	}
 	Buffer *buffer = storage_buffer_owner.get_or_null(p_buffer);
-	ERR_FAIL_NULL(buffer);
-
-	ERR_FAIL_COND_MSG(!buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT), "Buffer provided was not created to do indirect dispatch.");
-
-	ERR_FAIL_COND_MSG(RenderingDeviceIndirect::validate_dispatch_range(buffer->size, p_offset) != OK,
-			"Indirect dispatch offset must be four-byte aligned and its twelve-byte command must fit in the buffer.");
-
-#ifdef DEBUG_ENABLED
-
-	ERR_FAIL_COND_MSG(!compute_list.validation.pipeline_active, "No compute pipeline was set before attempting to draw.");
-
-	if (compute_list.validation.pipeline_push_constant_size > 0) {
-		// Using push constants, check that they were supplied.
-		ERR_FAIL_COND_MSG(!compute_list.validation.pipeline_push_constant_supplied,
-				"The shader in this pipeline requires a push constant to be set before drawing, but it's not present.");
+	if (buffer == nullptr || !buffer->usage.has_flag(RDD::BUFFER_USAGE_STORAGE_BIT) ||
+			RenderingDeviceIndirect::validate_dispatch_buffer(buffer->size, p_offset,
+					buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT), buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT)) != OK ||
+			!draw_graph.is_compute_list_usage_compatible(buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ) ||
+			_compute_list_validate_uniform_sets(buffer) != OK) {
+		return ERR_INVALID_PARAMETER;
 	}
+	// Every fallible preflight precedes reservations and descriptor/graph changes.
+	compute_list.indirect_trackers.insert(buffer->draw_tracker);
 
-#endif
-
-#ifdef DEBUG_ENABLED
-	for (uint32_t i = 0; i < compute_list.state.set_count; i++) {
-		if (compute_list.state.sets[i].pipeline_expected_format == 0) {
-			// Nothing expected by this pipeline.
-			continue;
-		}
-
-		if (compute_list.state.sets[i].pipeline_expected_format != compute_list.state.sets[i].uniform_set_format) {
-			if (compute_list.state.sets[i].uniform_set_format == 0) {
-				ERR_FAIL_MSG("Uniforms were never supplied for set (" + itos(i) + ") at the time of drawing, which are required by the pipeline.");
-			} else if (uniform_set_owner.owns(compute_list.state.sets[i].uniform_set)) {
-				UniformSet *us = uniform_set_owner.get_or_null(compute_list.state.sets[i].uniform_set);
-				ERR_FAIL_MSG("Uniforms supplied for set (" + itos(i) + "):\n" + _shader_uniform_debug(us->shader_id, us->shader_set) + "\nare not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n" + _shader_uniform_debug(compute_list.state.pipeline_shader));
-			} else {
-				ERR_FAIL_MSG("Uniforms supplied for set (" + itos(i) + ", which was just freed) are not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n" + _shader_uniform_debug(compute_list.state.pipeline_shader));
-			}
-		}
-	}
-#endif
 	thread_local LocalVector<RDD::UniformSetID> valid_descriptor_ids;
 	valid_descriptor_ids.clear();
 	valid_descriptor_ids.resize(compute_list.state.set_count);
@@ -7244,7 +7214,7 @@ void RenderingDevice::compute_list_dispatch_indirect(ComputeListID p_list, RID p
 		draw_graph.add_compute_list_bind_uniform_sets(compute_list.state.pipeline_shader_driver_id, valid_descriptor_ids, first_set_index, valid_set_count);
 	}
 
-	draw_graph.add_compute_list_dispatch_indirect(buffer->driver_id, p_offset);
+	draw_graph.add_compute_list_dispatch_indirect(buffer->driver_id, uint32_t(p_offset));
 	compute_list.state.dispatch_count++;
 
 	if (buffer->draw_tracker != nullptr) {
@@ -7252,10 +7222,13 @@ void RenderingDevice::compute_list_dispatch_indirect(ComputeListID p_list, RID p
 	}
 
 	_check_transfer_worker_buffer(buffer);
+	return OK;
 }
 
 void RenderingDevice::compute_list_add_barrier(ComputeListID p_list) {
 	ERR_RENDER_THREAD_GUARD();
+
+	ERR_FAIL_COND(p_list != ID_TYPE_COMPUTE_LIST || !compute_list.active);
 
 	compute_list_barrier_state = compute_list.state;
 	compute_list_end();
@@ -7265,13 +7238,14 @@ void RenderingDevice::compute_list_add_barrier(ComputeListID p_list) {
 		compute_list_bind_compute_pipeline(p_list, compute_list_barrier_state.pipeline);
 	}
 
-	for (uint32_t i = 0; i < compute_list_barrier_state.set_count; i++) {
-		if (compute_list_barrier_state.sets[i].uniform_set.is_valid()) {
+	for (uint32_t i = 0; i < MAX_UNIFORM_SETS; i++) {
+		// Preserve live staged slots even when the current pipeline does not use them.
+		if (uniform_set_owner.owns(compute_list_barrier_state.sets[i].uniform_set)) {
 			compute_list_bind_uniform_set(p_list, compute_list_barrier_state.sets[i].uniform_set, i);
 		}
 	}
 
-	if (compute_list_barrier_state.push_constant_size > 0) {
+	if (compute_list_barrier_state.push_constant_supplied && compute_list_barrier_state.push_constant_size > 0) {
 		compute_list_set_push_constant(p_list, compute_list_barrier_state.push_constant_data, compute_list_barrier_state.push_constant_size);
 	}
 }
@@ -9372,6 +9346,9 @@ void RenderingDevice::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("compute_list_bind_uniform_set", "compute_list", "uniform_set", "set_index"), &RenderingDevice::compute_list_bind_uniform_set);
 	ClassDB::bind_method(D_METHOD("compute_list_dispatch", "compute_list", "x_groups", "y_groups", "z_groups"), &RenderingDevice::compute_list_dispatch);
 	ClassDB::bind_method(D_METHOD("compute_list_dispatch_indirect", "compute_list", "buffer", "offset"), &RenderingDevice::compute_list_dispatch_indirect);
+	ClassDB::bind_method(D_METHOD("compute_list_bind_uniform_set_checked", "compute_list", "uniform_set", "set_index"), &RenderingDevice::compute_list_bind_uniform_set_checked);
+	ClassDB::bind_method(D_METHOD("compute_list_dispatch_checked", "compute_list", "x_groups", "y_groups", "z_groups"), &RenderingDevice::compute_list_dispatch_checked);
+	ClassDB::bind_method(D_METHOD("compute_list_dispatch_indirect_checked", "compute_list", "buffer", "offset"), &RenderingDevice::compute_list_dispatch_indirect_checked);
 	ClassDB::bind_method(D_METHOD("compute_list_add_barrier", "compute_list"), &RenderingDevice::compute_list_add_barrier);
 	ClassDB::bind_method(D_METHOD("compute_list_end"), &RenderingDevice::compute_list_end);
 

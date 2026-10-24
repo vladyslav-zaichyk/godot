@@ -45,6 +45,14 @@ inline Error validate_dispatch_range(uint64_t p_buffer_size, uint32_t p_offset) 
 	return uint64_t(p_offset) + 12 <= p_buffer_size ? OK : ERR_INVALID_PARAMETER;
 }
 
+// The checked API preserves signed source metadata until after validation.
+inline Error validate_dispatch_buffer(uint64_t p_buffer_size, int64_t p_offset, bool p_indirect, bool p_dynamic_persistent) {
+	if (p_offset < 0 || uint64_t(p_offset) > UINT32_MAX || !p_indirect || p_dynamic_persistent) {
+		return ERR_INVALID_PARAMETER;
+	}
+	return validate_dispatch_range(p_buffer_size, uint32_t(p_offset));
+}
+
 // Internal driver policy. Unknown limits must not disable existing backend paths.
 struct Capabilities {
 	enum StrideMode {
