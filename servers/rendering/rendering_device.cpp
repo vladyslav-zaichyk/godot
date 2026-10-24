@@ -6176,6 +6176,13 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 
 	ERR_FAIL_COND_MSG(!buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT), "Buffer provided was not created to do indirect dispatch.");
 
+	const Error range_error = RenderingDeviceIndirect::validate_draw_range(buffer->size, p_use_indices, p_offset, p_draw_count, p_stride, driver->get_indirect_draw_capabilities());
+	ERR_FAIL_COND_MSG(range_error == ERR_UNAVAILABLE, "Indirect draw count exceeds the enabled device capability.");
+	ERR_FAIL_COND_MSG(range_error != OK, "Indirect draw command offset, stride or complete buffer range is invalid.");
+	if (p_draw_count == 0) {
+		return;
+	}
+
 #ifdef DEBUG_ENABLED
 	ERR_FAIL_COND_MSG(!draw_list.validation.pipeline_active,
 			"No render pipeline was set before attempting to draw.");
@@ -6192,6 +6199,13 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 		// Using push constants, check that they were supplied.
 		ERR_FAIL_COND_MSG(!draw_list.validation.pipeline_push_constant_supplied,
 				"The shader in this pipeline requires a push constant to be set before drawing, but it's not present.");
+	}
+
+	if (p_use_indices) {
+		ERR_FAIL_COND_MSG(!draw_list.validation.index_array_count,
+				"Draw command requested indices, but no index buffer was set.");
+		ERR_FAIL_COND_MSG(draw_list.validation.pipeline_uses_restart_indices != draw_list.validation.index_buffer_uses_restart_indices,
+				"The usage of restart indices in index buffer does not match the render primitive in the pipeline.");
 	}
 #endif
 
@@ -6216,6 +6230,15 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 	}
 #endif
 
+	// Resolve every descriptor resource before recording or changing binding state.
+	UniformSet *uniform_sets[MAX_UNIFORM_SETS] = {};
+	for (uint32_t i = 0; i < draw_list.state.set_count; i++) {
+		if (draw_list.state.sets[i].pipeline_expected_format != 0 && !draw_list.state.sets[i].bound) {
+			uniform_sets[i] = uniform_set_owner.get_or_null(draw_list.state.sets[i].uniform_set);
+			ERR_FAIL_NULL(uniform_sets[i]);
+		}
+	}
+
 	// Prepare descriptor sets if the API doesn't use pipeline barriers.
 	if (!driver->api_trait_get(RDD::API_TRAIT_HONORS_PIPELINE_BARRIERS)) {
 		for (uint32_t i = 0; i < draw_list.state.set_count; i++) {
@@ -6237,8 +6260,7 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 			// All good, see if this requires re-binding.
 			draw_graph.add_draw_list_bind_uniform_set(draw_list.state.pipeline_shader_driver_id, draw_list.state.sets[i].uniform_set_driver_id, i);
 
-			UniformSet *uniform_set = uniform_set_owner.get_or_null(draw_list.state.sets[i].uniform_set);
-			ERR_FAIL_NULL(uniform_set);
+			UniformSet *uniform_set = uniform_sets[i];
 			_uniform_set_update_shared(uniform_set);
 			_uniform_set_update_clears(uniform_set);
 
@@ -6249,20 +6271,8 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 	}
 
 	if (p_use_indices) {
-#ifdef DEBUG_ENABLED
-		ERR_FAIL_COND_MSG(!draw_list.validation.index_array_count,
-				"Draw command requested indices, but no index buffer was set.");
-
-		ERR_FAIL_COND_MSG(draw_list.validation.pipeline_uses_restart_indices != draw_list.validation.index_buffer_uses_restart_indices,
-				"The usage of restart indices in index buffer does not match the render primitive in the pipeline.");
-#endif
-
-		ERR_FAIL_COND_MSG(p_offset + 20 > buffer->size, "Offset provided (+20) is past the end of buffer.");
-
 		draw_graph.add_draw_list_draw_indexed_indirect(buffer->driver_id, p_offset, p_draw_count, p_stride);
 	} else {
-		ERR_FAIL_COND_MSG(p_offset + 16 > buffer->size, "Offset provided (+16) is past the end of buffer.");
-
 		draw_graph.add_draw_list_draw_indirect(buffer->driver_id, p_offset, p_draw_count, p_stride);
 	}
 

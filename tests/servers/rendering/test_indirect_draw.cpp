@@ -1,0 +1,163 @@
+/**************************************************************************/
+/*  test_indirect_draw.cpp                                                */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
+#include "tests/test_macros.h"
+
+TEST_FORCE_LINK(test_indirect_draw)
+
+#include "servers/rendering/rendering_device_indirect.h"
+
+namespace TestIndirectDraw {
+
+using RenderingDeviceIndirect::Capabilities;
+using RenderingDeviceIndirect::validate_draw_range;
+
+static constexpr Capabilities VULKAN = { 1024, Capabilities::STRIDE_VULKAN };
+static constexpr Capabilities VULKAN_SINGLE = { 1, Capabilities::STRIDE_VULKAN };
+static constexpr Capabilities PACKED = { 0, Capabilities::STRIDE_PACKED };
+static constexpr Capabilities REQUESTED = {};
+
+TEST_CASE("[Rendering][IndirectDraw] Every call requires aligned command offset") {
+	for (bool indexed : { false, true }) {
+		for (uint32_t count : { 0u, 1u, 2u }) {
+			CHECK(validate_draw_range(128, indexed, 1, count, 32, VULKAN) == ERR_INVALID_PARAMETER);
+			CHECK(validate_draw_range(128, indexed, 2, count, 32, PACKED) == ERR_INVALID_PARAMETER);
+			CHECK(validate_draw_range(128, indexed, 3, count, 32, REQUESTED) == ERR_INVALID_PARAMETER);
+		}
+	}
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Empty spans do not require one command or inspect stride") {
+	for (bool indexed : { false, true }) {
+		CHECK(validate_draw_range(0, indexed, 0, 0, 0, VULKAN_SINGLE) == OK);
+		CHECK(validate_draw_range(4, indexed, 128, 0, 1, VULKAN_SINGLE) == OK);
+		CHECK(validate_draw_range(0, indexed, UINT32_MAX - 3, 0, UINT32_MAX, VULKAN_SINGLE) == OK);
+	}
+}
+
+TEST_CASE("[Rendering][IndirectDraw] One command ignores every supplied stride") {
+	for (uint32_t stride : { 0u, 1u, 16u, 20u, UINT32_MAX }) {
+		CHECK(validate_draw_range(20, true, 0, 1, stride, VULKAN_SINGLE) == OK);
+		CHECK(validate_draw_range(16, false, 0, 1, stride, VULKAN_SINGLE) == OK);
+	}
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Single command checks native command size and prefix") {
+	CHECK(validate_draw_range(32, true, 12, 1, 0, VULKAN) == OK);
+	CHECK(validate_draw_range(31, true, 12, 1, 0, VULKAN) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(28, false, 12, 1, 0, VULKAN) == OK);
+	CHECK(validate_draw_range(27, false, 12, 1, 0, VULKAN) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(16, true, 0, 1, 0, VULKAN) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Padded indexed span validates its final command") {
+	CHECK(validate_draw_range(116, true, 32, 3, 32, VULKAN) == OK);
+	CHECK(validate_draw_range(115, true, 32, 3, 32, VULKAN) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(52, true, 32, 3, 32, VULKAN) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Padded nonindexed span uses a sixteen byte final command") {
+	CHECK(validate_draw_range(112, false, 32, 3, 32, VULKAN) == OK);
+	CHECK(validate_draw_range(111, false, 32, 3, 32, VULKAN) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(48, false, 32, 3, 32, VULKAN) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Packed Vulkan spans fit without trailing padding") {
+	CHECK(validate_draw_range(80, true, 0, 4, 20, VULKAN) == OK);
+	CHECK(validate_draw_range(79, true, 0, 4, 20, VULKAN) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(64, false, 0, 4, 16, VULKAN) == OK);
+	CHECK(validate_draw_range(63, false, 0, 4, 16, VULKAN) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Vulkan rejects undersized and unaligned repeated strides") {
+	for (uint32_t stride : { 0u, 4u, 16u, 19u, 21u }) {
+		CHECK(validate_draw_range(256, true, 0, 2, stride, VULKAN) == ERR_INVALID_PARAMETER);
+	}
+	for (uint32_t stride : { 0u, 4u, 12u, 15u, 17u }) {
+		CHECK(validate_draw_range(256, false, 0, 2, stride, VULKAN) == ERR_INVALID_PARAMETER);
+	}
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Missing Vulkan multidraw permits an ordinary single draw") {
+	CHECK(validate_draw_range(20, true, 0, 1, 0, VULKAN_SINGLE) == OK);
+	CHECK(validate_draw_range(40, true, 0, 2, 20, VULKAN_SINGLE) == ERR_UNAVAILABLE);
+	CHECK(validate_draw_range(32, false, 0, 2, 16, VULKAN_SINGLE) == ERR_UNAVAILABLE);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Known device maximum is inclusive") {
+	CHECK(validate_draw_range(20480, true, 0, 1024, 20, VULKAN) == OK);
+	CHECK(validate_draw_range(20500, true, 0, 1025, 20, VULKAN) == ERR_UNAVAILABLE);
+	CHECK(validate_draw_range(16400, false, 0, 1025, 16, VULKAN) == ERR_UNAVAILABLE);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Unknown maximum preserves existing backend multidraw") {
+	CHECK(validate_draw_range(20500, true, 0, 1025, 20, REQUESTED) == OK);
+	CHECK(validate_draw_range(20500, true, 0, 1025, 0, PACKED) == OK);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Offset addition does not wrap at the uint32 boundary") {
+	CHECK(validate_draw_range(UINT32_MAX, true, UINT32_MAX - 3, 1, 0, VULKAN) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(UINT32_MAX, false, UINT32_MAX - 3, 1, 0, VULKAN) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(UINT32_MAX, true, UINT32_MAX - 23, 1, 0, VULKAN) == OK);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Repeated stride product is evaluated in sixty four bits") {
+	CHECK(validate_draw_range(UINT32_MAX, true, 0, 3, 0x80000000u, REQUESTED) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(UINT32_MAX, false, 0, 3, 0x80000000u, REQUESTED) == ERR_INVALID_PARAMETER);
+	const uint64_t exact_end = uint64_t(UINT32_MAX - 3) + uint64_t(UINT32_MAX - 1) * uint64_t(UINT32_MAX) + 20;
+	CHECK(validate_draw_range(exact_end, true, UINT32_MAX - 3, UINT32_MAX, UINT32_MAX, REQUESTED) == OK);
+	CHECK(validate_draw_range(exact_end - 1, true, UINT32_MAX - 3, UINT32_MAX, UINT32_MAX, REQUESTED) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] D3D12 fixed packed signatures ignore requested stride") {
+	for (uint32_t stride : { 0u, 1u, 20u, 32u, UINT32_MAX }) {
+		CHECK(validate_draw_range(80, true, 0, 4, stride, PACKED) == OK);
+		CHECK(validate_draw_range(79, true, 0, 4, stride, PACKED) == ERR_INVALID_PARAMETER);
+		CHECK(validate_draw_range(64, false, 0, 4, stride, PACKED) == OK);
+		CHECK(validate_draw_range(63, false, 0, 4, stride, PACKED) == ERR_INVALID_PARAMETER);
+	}
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Metal zero stride repeatedly reads the same command") {
+	CHECK(validate_draw_range(20, true, 0, 1025, 0, REQUESTED) == OK);
+	CHECK(validate_draw_range(19, true, 0, 1025, 0, REQUESTED) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(16, false, 0, 1025, 0, REQUESTED) == OK);
+	CHECK(validate_draw_range(15, false, 0, 1025, 0, REQUESTED) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw] Requested backend strides retain overlap and padding semantics") {
+	CHECK(validate_draw_range(28, true, 0, 3, 4, REQUESTED) == OK);
+	CHECK(validate_draw_range(27, true, 0, 3, 4, REQUESTED) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(116, true, 32, 3, 32, REQUESTED) == OK);
+	CHECK(validate_draw_range(115, true, 32, 3, 32, REQUESTED) == ERR_INVALID_PARAMETER);
+	CHECK(validate_draw_range(92, true, 32, 3, 32, PACKED) == OK);
+}
+
+} // namespace TestIndirectDraw

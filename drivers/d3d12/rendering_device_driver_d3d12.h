@@ -924,6 +924,9 @@ public:
 	virtual uint64_t get_lazily_memory_used() override final;
 	virtual uint64_t limit_get(Limit p_limit) override final;
 	virtual uint64_t api_trait_get(ApiTrait p_trait) override final;
+	virtual IndirectDrawCapabilities get_indirect_draw_capabilities() const override final {
+		return { 0, IndirectDrawCapabilities::STRIDE_PACKED };
+	}
 	virtual bool has_feature(Features p_feature) override final;
 	virtual const MultiviewCapabilities &get_multiview_capabilities() override final;
 	virtual const FragmentShadingRateCapabilities &get_fragment_shading_rate_capabilities() override final;

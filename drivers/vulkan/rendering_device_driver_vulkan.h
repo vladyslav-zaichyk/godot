@@ -794,6 +794,9 @@ public:
 	virtual uint64_t get_lazily_memory_used() override final;
 	virtual uint64_t limit_get(Limit p_limit) override final;
 	virtual uint64_t api_trait_get(ApiTrait p_trait) override final;
+	virtual IndirectDrawCapabilities get_indirect_draw_capabilities() const override final {
+		return { requested_device_features.multiDrawIndirect ? physical_device_properties.limits.maxDrawIndirectCount : 1, IndirectDrawCapabilities::STRIDE_VULKAN };
+	}
 	virtual bool supports_indirect_first_instance() const override final { return requested_device_features.drawIndirectFirstInstance != VK_FALSE; }
 	virtual bool has_feature(Features p_feature) override final;
 	virtual const MultiviewCapabilities &get_multiview_capabilities() override final;
