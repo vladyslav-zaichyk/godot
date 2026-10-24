@@ -6230,20 +6230,29 @@ Error RenderingDevice::_draw_list_validate_counted_uniform_sets() {
 
 Error RenderingDevice::draw_list_draw_indirect_count(DrawListID p_list, bool p_use_indices, RID p_buffer, int64_t p_offset, RID p_count_buffer, int64_t p_count_offset, int64_t p_max_draw_count, int64_t p_stride) {
 	ERR_RENDER_THREAD_GUARD_V(ERR_INVALID_PARAMETER);
-	ERR_FAIL_COND_V_MSG(!draw_list.active || p_list != (int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT), ERR_INVALID_PARAMETER, "No matching active draw list.");
-	ERR_FAIL_COND_V_MSG(!driver->has_indirect_draw_count(), ERR_UNAVAILABLE, "GPU-sourced indirect draw count is unavailable on this device.");
-
+	// This checked API reports expected metadata/capability rejection by return
+	// value. Do not require callers to suppress global diagnostics to probe it.
+	if (!draw_list.active || p_list != (int64_t(ID_TYPE_DRAW_LIST) << ID_BASE_SHIFT)) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (!driver->has_indirect_draw_count()) {
+		return ERR_UNAVAILABLE;
+	}
 	Buffer *buffer = storage_buffer_owner.get_or_null(p_buffer);
 	Buffer *count_buffer = storage_buffer_owner.get_or_null(p_count_buffer);
-	ERR_FAIL_NULL_V(buffer, ERR_INVALID_PARAMETER);
-	ERR_FAIL_NULL_V(count_buffer, ERR_INVALID_PARAMETER);
-	ERR_FAIL_COND_V_MSG(buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT) || count_buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT), ERR_INVALID_PARAMETER, "Counted indirect drawing requires ordinary nonpersistent storage buffers.");
-	ERR_FAIL_COND_V_MSG(!buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT) || !count_buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT), ERR_INVALID_PARAMETER, "Both counted indirect buffers require indirect usage.");
+	if (buffer == nullptr || count_buffer == nullptr ||
+			buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT) || count_buffer->usage.has_flag(RDD::BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT) ||
+			!buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT) || !count_buffer->usage.has_flag(RDD::BUFFER_USAGE_INDIRECT_BIT)) {
+		return ERR_INVALID_PARAMETER;
+	}
 	const Error range_error = RenderingDeviceIndirect::validate_count_draw_range(buffer->size, count_buffer->size, p_use_indices, p_offset, p_count_offset, p_max_draw_count, p_stride, buffer == count_buffer, driver->get_indirect_draw_count_limit());
-	ERR_FAIL_COND_V_MSG(range_error != OK, range_error, "Invalid counted indirect offsets, stride, maximum or complete buffer range.");
-	ERR_FAIL_COND_V_MSG(!draw_graph.is_draw_list_usage_compatible(buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ) || !draw_graph.is_draw_list_usage_compatible(count_buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ), ERR_INVALID_PARAMETER, "Counted indirect banks already have an incompatible use in this draw list.");
-	ERR_FAIL_COND_V_MSG(!render_pipeline_owner.owns(draw_list.state.pipeline), ERR_INVALID_PARAMETER, "Counted drawing requires a live render pipeline.");
-	ERR_FAIL_COND_V_MSG(p_use_indices && !index_array_owner.owns(draw_list.state.index_array), ERR_INVALID_PARAMETER, "Indexed counted drawing requires a live index array.");
+	if (range_error != OK) {
+		return range_error;
+	}
+	if (!draw_graph.is_draw_list_usage_compatible(buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ) || !draw_graph.is_draw_list_usage_compatible(count_buffer->draw_tracker, RDG::RESOURCE_USAGE_INDIRECT_BUFFER_READ) ||
+			!render_pipeline_owner.owns(draw_list.state.pipeline) || (p_use_indices && !index_array_owner.owns(draw_list.state.index_array))) {
+		return ERR_INVALID_PARAMETER;
+	}
 	return _draw_list_draw_indirect(p_use_indices, buffer, uint32_t(p_offset), uint32_t(p_max_draw_count), uint32_t(p_stride), count_buffer, uint32_t(p_count_offset));
 }
 

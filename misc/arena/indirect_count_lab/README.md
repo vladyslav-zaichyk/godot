@@ -117,7 +117,10 @@ the command bank is a useful layout. Deduplicate the same tracker; register
 both distinct buffers as INDIRECT_BUFFER_READ, include DRAW_INDIRECT stage
 and service transfer-worker readiness for each. Runtime count zero still
 records the draw and its dependencies. No CPU count readback or implicit LOOP
-fallback is permitted.
+fallback is permitted. Expected CPU metadata, RID, list and capability
+rejections return `Error` without logging. Callers must check that value.
+Render-thread violations and standard draw-state debug diagnostics retain
+engine diagnostics; no global log suppression is used by the fixture.
 
 The current graph cannot combine arbitrary shader/vertex/index reads with
 indirect reads of one tracker inside a draw list. E10a rejects these aliases
