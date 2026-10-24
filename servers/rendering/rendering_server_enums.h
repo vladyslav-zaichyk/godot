@@ -234,6 +234,7 @@ enum MultimeshTransformFormat {
 enum MultimeshIndirectSubmissionMode {
 	MULTIMESH_INDIRECT_SUBMISSION_LOOP,
 	MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW,
+	MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT = 2,
 };
 
 enum MultimeshPhysicsInterpolationQuality {

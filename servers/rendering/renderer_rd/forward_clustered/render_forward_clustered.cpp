@@ -38,6 +38,10 @@
 #include "servers/rendering/renderer_rd/storage_rd/particles_storage.h"
 #include "servers/rendering/renderer_rd/storage_rd/texture_storage.h"
 #include "servers/rendering/renderer_rd/uniform_set_cache_rd.h"
+#ifndef XR_DISABLED
+#include "servers/xr/xr_interface.h"
+#include "servers/xr/xr_server.h"
+#endif
 #include "servers/rendering/renderer_viewport.h"
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_server_default.h"
@@ -311,9 +315,12 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 	RD::FramebufferFormatID framebuffer_format = p_framebuffer_Format;
 
 	//global scope bindings
-	RD::get_singleton()->draw_list_bind_uniform_set(draw_list, render_base_uniform_set, SCENE_UNIFORM_SET);
-	RD::get_singleton()->draw_list_bind_uniform_set(draw_list, p_params->render_pass_uniform_set, RENDER_PASS_UNIFORM_SET);
-	RD::get_singleton()->draw_list_bind_uniform_set(draw_list, scene_shader.default_vec4_xform_uniform_set, TRANSFORMS_UNIFORM_SET);
+	if (RD::get_singleton()->draw_list_bind_uniform_set_checked(draw_list, render_base_uniform_set, SCENE_UNIFORM_SET) != OK ||
+			RD::get_singleton()->draw_list_bind_uniform_set_checked(draw_list, p_params->render_pass_uniform_set, RENDER_PASS_UNIFORM_SET) != OK ||
+			RD::get_singleton()->draw_list_bind_uniform_set_checked(draw_list, scene_shader.default_vec4_xform_uniform_set, TRANSFORMS_UNIFORM_SET) != OK) {
+		WARN_PRINT_ONCE("Forward+ skipped a render-list batch because a global binding conflicts with counted indirect storage or is invalid.");
+		return;
+	}
 
 	RID prev_material_uniform_set;
 
@@ -326,6 +333,14 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 	SceneShaderForwardClustered::ShaderData::PipelineKey pipeline_key;
 	uint32_t pipeline_hash = 0;
 	uint32_t prev_pipeline_hash = 0;
+	auto invalidate_bindings = [&]() {
+		prev_vertex_array_rd = RID();
+		prev_index_array_rd = RID();
+		prev_xforms_uniform_set = RID();
+		prev_material_uniform_set = RID();
+		prev_shader = nullptr;
+		prev_pipeline_hash = 0;
+	};
 
 	bool shadow_pass = (p_pass_mode == PASS_MODE_SHADOW) || (p_pass_mode == PASS_MODE_SHADOW_DP);
 
@@ -346,6 +361,27 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 	for (uint32_t i = p_from_element; i < p_to_element; i++) {
 		const GeometryInstanceSurfaceDataCache *surf = p_params->elements[i];
 		const RenderElementInfo &element_info = p_params->element_info[i];
+		auto reject_surface_binding = [&](Error p_error) {
+			// A failed checked bind never publishes its cache value. Earlier successful
+			// bindings may have changed state, so force the next owner to rebind all of it.
+			invalidate_bindings();
+			if (!surf->owner->indirect_binding_warning) {
+				WARN_PRINT(vformat("Forward+ skipped a draw after checked binding or counted submission failed (Error %d).", p_error));
+				surf->owner->indirect_binding_warning = true;
+			}
+			i += element_info.repeat - 1;
+		};
+
+		if (surf->owner->shader_driven_instances &&
+				mesh_storage->multimesh_get_shared_draw_submission_mode(surf->owner->data->base) == RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT &&
+				!p_params->allow_counted_instances) {
+			if (!surf->owner->counted_pass_warning) {
+				WARN_PRINT("Counted MultiMesh draws require the main single-view opaque/depth purpose; secondary, transparent, shadow and XR consumers are skipped.");
+				surf->owner->counted_pass_warning = true;
+			}
+			i += element_info.repeat - 1;
+			continue;
+		}
 
 		if (p_pass_mode == PASS_MODE_COLOR && surf->color_pass_inclusion_mask && (p_color_pass_flags & surf->color_pass_inclusion_mask) == 0) {
 			// Some surfaces can be repeated in multiple render lists. We exclude them from being rendered on the color pass based on the
@@ -580,13 +616,21 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 			}
 
 			if (prev_vertex_array_rd != vertex_array_rd) {
-				RD::get_singleton()->draw_list_bind_vertex_array(draw_list, vertex_array_rd);
+				const Error bind_error = RD::get_singleton()->draw_list_bind_vertex_array_checked(draw_list, vertex_array_rd);
+				if (bind_error != OK) {
+					reject_surface_binding(bind_error);
+					continue;
+				}
 				prev_vertex_array_rd = vertex_array_rd;
 			}
 
 			if (prev_index_array_rd != index_array_rd) {
 				if (index_array_rd.is_valid()) {
-					RD::get_singleton()->draw_list_bind_index_array(draw_list, index_array_rd);
+					const Error bind_error = RD::get_singleton()->draw_list_bind_index_array_checked(draw_list, index_array_rd);
+					if (bind_error != OK) {
+						reject_surface_binding(bind_error);
+						continue;
+					}
 				}
 				prev_index_array_rd = index_array_rd;
 			}
@@ -596,14 +640,22 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 			}
 
 			if (xforms_uniform_set.is_valid() && prev_xforms_uniform_set != xforms_uniform_set) {
-				RD::get_singleton()->draw_list_bind_uniform_set(draw_list, xforms_uniform_set, TRANSFORMS_UNIFORM_SET);
+				const Error bind_error = RD::get_singleton()->draw_list_bind_uniform_set_checked(draw_list, xforms_uniform_set, TRANSFORMS_UNIFORM_SET);
+				if (bind_error != OK) {
+					reject_surface_binding(bind_error);
+					continue;
+				}
 				prev_xforms_uniform_set = xforms_uniform_set;
 			}
 
 			if (material_uniform_set != prev_material_uniform_set) {
 				// Update uniform set.
-				if (material_uniform_set.is_valid() && RD::get_singleton()->uniform_set_is_valid(material_uniform_set)) { // Material may not have a uniform set.
-					RD::get_singleton()->draw_list_bind_uniform_set(draw_list, material_uniform_set, MATERIAL_UNIFORM_SET);
+				if (material_uniform_set.is_valid()) { // A nonzero invalidated set must fail the checked bind, not reuse old descriptors.
+					const Error bind_error = RD::get_singleton()->draw_list_bind_uniform_set_checked(draw_list, material_uniform_set, MATERIAL_UNIFORM_SET);
+					if (bind_error != OK) {
+						reject_surface_binding(bind_error);
+						continue;
+					}
 				}
 
 				prev_material_uniform_set = material_uniform_set;
@@ -649,13 +701,29 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 				if (surf->owner->shader_driven_instances) {
 					const uint32_t count = uint32_t(mesh_storage->multimesh_get_shared_draw_command_count(multimesh));
 					const uint32_t stride = uint32_t(mesh_storage->multimesh_get_shared_draw_command_stride(multimesh));
-					if (mesh_storage->multimesh_get_shared_draw_submission_mode(multimesh) == RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP) {
-						// Attachment proves every offset fits uint32. Same owner, bindings and push constants.
-						for (uint32_t command = 0; command < count; command++) {
-							RD::get_singleton()->draw_list_draw_indirect(draw_list, true, commands, offset + command * stride, 1, 0);
+					switch (mesh_storage->multimesh_get_shared_draw_submission_mode(multimesh)) {
+						case RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP: {
+							// Attachment proves every offset fits uint32. Same owner, bindings and push constants.
+							for (uint32_t command = 0; command < count; command++) {
+								RD::get_singleton()->draw_list_draw_indirect(draw_list, true, commands, offset + command * stride, 1, 0);
+							}
+						} break;
+						case RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW: {
+							RD::get_singleton()->draw_list_draw_indirect(draw_list, true, commands, offset, count, stride);
+						} break;
+						case RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT: {
+							const Error draw_error = RD::get_singleton()->draw_list_draw_indirect_count(draw_list, true, commands, offset,
+									mesh_storage->multimesh_get_shared_draw_count_buffer_rd_rid(multimesh),
+									mesh_storage->multimesh_get_shared_draw_count_byte_offset(multimesh), count, stride);
+							if (draw_error != OK) {
+								reject_surface_binding(draw_error);
+								continue;
+							}
+						} break;
+						default: {
+							reject_surface_binding(ERR_INVALID_PARAMETER);
+							continue;
 						}
-					} else {
-						RD::get_singleton()->draw_list_draw_indirect(draw_list, true, commands, offset, count, stride);
 					}
 				} else {
 					RD::get_singleton()->draw_list_draw_indirect(draw_list, index_array_rd.is_valid(), commands, offset + surf->surface_index * sizeof(uint32_t) * mesh_storage->INDIRECT_MULTIMESH_COMMAND_STRIDE, 1, 0);
@@ -1772,6 +1840,15 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		rb_data = rb->get_custom_data(RB_SCOPE_FORWARD_CLUSTERED);
 	}
 	bool is_reflection_probe = p_render_data->reflection_probe.is_valid();
+	bool has_primary_xr_interface = false;
+#ifndef XR_DISABLED
+	if (XRServer *xr_server = XRServer::get_singleton()) {
+		has_primary_xr_interface = xr_server->get_primary_interface().is_valid();
+	}
+#endif
+	// XR can expose a single view. Until explicit per-view XR purpose is carried
+	// here, conservatively exclude counted views whenever a primary XR interface exists.
+	const bool allow_counted_instances = !is_reflection_probe && p_render_data->scene_data->view_count == 1 && !has_primary_xr_interface;
 
 	static const int texture_multisamples[RSE::VIEWPORT_MSAA_MAX] = { 1, 2, 4, 8 };
 
@@ -2193,6 +2270,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 		bool finish_depth = using_ssao || using_ssil || using_sdfgi || using_voxelgi || ce_pre_opaque_resolved_depth || ce_post_opaque_resolved_depth;
 		RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_OPAQUE].elements.size(), reverse_cull, depth_pass_mode, 0, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization, motion_vectors_required);
+		render_list_params.allow_counted_instances = allow_counted_instances;
 		_render_list_with_draw_list(&render_list_params, depth_framebuffer, RD::DrawFlags(needs_pre_resolve ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_ALL), depth_pass_clear, 0.0f, 0u, p_render_data->render_region);
 
 		RD::get_singleton()->draw_command_end_label();
@@ -2276,6 +2354,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			uint32_t opaque_color_pass_flags = using_motion_pass ? (color_pass_flags & ~uint32_t(COLOR_PASS_FLAG_MOTION_VECTORS)) : color_pass_flags;
 			RID opaque_framebuffer = using_motion_pass ? rb_data->get_color_pass_fb(opaque_color_pass_flags) : color_framebuffer;
 			RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_OPAQUE].elements.size(), reverse_cull, PASS_MODE_COLOR, opaque_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization, motion_vectors_required);
+			render_list_params.allow_counted_instances = allow_counted_instances;
 			_render_list_with_draw_list(&render_list_params, opaque_framebuffer, RD::DrawFlags(load_color ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_COLOR_ALL) | (depth_pre_pass ? RD::DRAW_DEFAULT_ALL : RD::DRAW_CLEAR_DEPTH), c, 0.0f, 0u, p_render_data->render_region);
 		}
 
@@ -2302,6 +2381,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_MOTION, p_render_data, radiance_texture, samplers, opaque_pass_uniform_buffer_index, true);
 
 			RenderListParameters render_list_params(render_list[RENDER_LIST_MOTION].elements.ptr(), render_list[RENDER_LIST_MOTION].element_info.ptr(), render_list[RENDER_LIST_MOTION].elements.size(), reverse_cull, PASS_MODE_COLOR, color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RSE::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization, motion_vectors_required);
+			render_list_params.allow_counted_instances = allow_counted_instances;
 			_render_list_with_draw_list(&render_list_params, color_framebuffer);
 
 			RD::get_singleton()->draw_command_end_label();

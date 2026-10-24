@@ -435,6 +435,21 @@ public:
 	FUNC5R(Error, multimesh_attach_shared_buffers, RID, RID, int, RID, int)
 	FUNC5R(Error, multimesh_attach_shared_draw_buffer, RID, int, RID, int, bool)
 	FUNC8R(Error, multimesh_attach_shared_draw_command_span, RID, int64_t, RID, int64_t, int64_t, int64_t, RSE::MultimeshIndirectSubmissionMode, bool)
+	// Preserve synchronous return-value marshaling without expanding the shared wrapper macros.
+	virtual Error multimesh_attach_shared_draw_command_span_count(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_commands, int64_t p_command_byte_offset, RID p_count_buffer, int64_t p_count_byte_offset, int64_t p_maximum_count, int64_t p_command_byte_stride, bool p_use_shader_motion_vectors) override {
+		WRITE_ACTION
+		if (ASYNC_COND_PUSH_AND_RET) {
+			Error result;
+			command_queue.push_and_ret(RSG::mesh_storage, &RendererMeshStorage::multimesh_attach_shared_draw_command_span_count, &result, p_multimesh, p_draw_slot_capacity, p_commands, p_command_byte_offset, p_count_buffer, p_count_byte_offset, p_maximum_count, p_command_byte_stride, p_use_shader_motion_vectors);
+			SYNC_DEBUG
+			MAIN_THREAD_SYNC_CHECK
+			return result;
+		}
+		command_queue.flush_if_pending();
+		return RSG::mesh_storage->multimesh_attach_shared_draw_command_span_count(p_multimesh, p_draw_slot_capacity, p_commands, p_command_byte_offset, p_count_buffer, p_count_byte_offset, p_maximum_count, p_command_byte_stride, p_use_shader_motion_vectors);
+	}
+	FUNC1RC(RID, multimesh_get_shared_draw_count_buffer_rd_rid, RID)
+	FUNC1RC(int, multimesh_get_shared_draw_count_byte_offset, RID)
 	FUNC1RC(int, multimesh_get_command_byte_offset, RID)
 	FUNC1RC(int, multimesh_get_shared_draw_command_count, RID)
 	FUNC1RC(int, multimesh_get_shared_draw_command_stride, RID)

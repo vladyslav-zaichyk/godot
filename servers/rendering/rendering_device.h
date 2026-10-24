@@ -1508,6 +1508,9 @@ private:
 
 	void _draw_list_start(const Rect2i &p_viewport);
 	void _draw_list_end(Rect2i *r_last_viewport = nullptr);
+	Error _draw_list_bind_uniform_set(DrawListID p_list, RID p_uniform_set, uint32_t p_index, bool p_report_alias_errors);
+	Error _draw_list_bind_vertex_array(DrawListID p_list, RID p_vertex_array, bool p_report_alias_errors);
+	Error _draw_list_bind_index_array(DrawListID p_list, RID p_index_array, bool p_report_alias_errors);
 	bool _draw_list_uniform_set_has_counted_alias(const UniformSet *p_uniform_set) const;
 	Error _draw_list_validate_counted_uniform_sets();
 	Error _draw_list_draw_indirect(bool p_use_indices, Buffer *p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride, Buffer *p_count_buffer = nullptr, uint32_t p_count_offset = 0);
@@ -1559,11 +1562,18 @@ public:
 	void draw_list_bind_vertex_array(DrawListID p_list, RID p_vertex_array);
 	void draw_list_bind_vertex_buffers_format(DrawListID p_list, VertexFormatID p_vertex_format, uint32_t p_vertex_count, const Span<RID> &p_vertex_buffers, const Span<uint64_t> &p_offsets = Vector<uint64_t>());
 	void draw_list_bind_index_array(DrawListID p_list, RID p_index_array);
+	// Native renderer operations, intentionally not bound to ClassDB. Expected
+	// counted-bank alias rejection returns Error without emitting a diagnostic.
+	Error draw_list_bind_uniform_set_checked(DrawListID p_list, RID p_uniform_set, uint32_t p_index);
+	Error draw_list_bind_vertex_array_checked(DrawListID p_list, RID p_vertex_array);
+	Error draw_list_bind_index_array_checked(DrawListID p_list, RID p_index_array);
 	void draw_list_set_line_width(DrawListID p_list, float p_width);
 	void draw_list_set_push_constant(DrawListID p_list, const void *p_data, uint32_t p_data_size);
 
 	void draw_list_draw(DrawListID p_list, bool p_use_indices, uint32_t p_instances = 1, uint32_t p_procedural_vertices = 0);
 	void draw_list_draw_indirect(DrawListID p_list, bool p_use_indices, RID p_buffer, uint32_t p_offset = 0, uint32_t p_draw_count = 1, uint32_t p_stride = 0);
+	// List-independent metadata validation for native borrowed-buffer consumers.
+	Error validate_draw_indirect_count_buffers(bool p_use_indices, RID p_buffer, int64_t p_offset, RID p_count_buffer, int64_t p_count_offset, int64_t p_max_draw_count, int64_t p_stride);
 	Error draw_list_draw_indirect_count(DrawListID p_list, bool p_use_indices, RID p_buffer, int64_t p_offset, RID p_count_buffer, int64_t p_count_offset, int64_t p_max_draw_count, int64_t p_stride);
 
 	void draw_list_set_viewport(DrawListID p_list, const Rect2 &p_rect);

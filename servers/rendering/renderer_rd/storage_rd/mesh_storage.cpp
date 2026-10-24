@@ -1592,6 +1592,37 @@ void MeshStorage::_multimesh_clear_shared_uniform_sets(MultiMesh *p_multimesh) {
 	p_multimesh->uniform_set_2d = RID();
 }
 
+void MeshStorage::_multimesh_commit_shared_view(MultiMesh *p_multimesh, int p_capacity, RID p_transforms, RID p_commands, uint32_t p_offset, uint32_t p_count, uint32_t p_stride, RSE::MultimeshIndirectSubmissionMode p_mode, bool p_shader_driven, bool p_shader_motion_vectors, RID p_count_buffer, uint32_t p_count_offset) {
+	// Call only after every fallible check. Borrowed banks are never written/freed.
+	_multimesh_clear_shared_uniform_sets(p_multimesh);
+	p_multimesh->shared_buffers = true;
+	p_multimesh->shader_driven = p_shader_driven;
+	p_multimesh->shader_motion_vectors = p_shader_motion_vectors;
+	p_multimesh->buffer = p_transforms;
+	p_multimesh->command_buffer = p_commands;
+	p_multimesh->command_byte_offset = p_offset;
+	p_multimesh->shared_draw_command_count = p_count;
+	p_multimesh->shared_draw_command_stride = p_stride;
+	p_multimesh->shared_draw_submission_mode = p_mode;
+	p_multimesh->shared_draw_count_buffer = p_count_buffer;
+	p_multimesh->shared_draw_count_byte_offset = p_count_offset;
+	p_multimesh->instances = p_capacity;
+	p_multimesh->visible_instances = -1;
+	p_multimesh->indirect = true;
+	p_multimesh->xform_format = RSE::MULTIMESH_TRANSFORM_3D;
+	p_multimesh->uses_colors = false;
+	p_multimesh->uses_custom_data = false;
+	p_multimesh->stride_cache = p_shader_driven ? 0 : 12;
+	p_multimesh->color_offset_cache = p_shader_driven ? 0 : 12;
+	p_multimesh->custom_data_offset_cache = p_shader_driven ? 0 : 12;
+	p_multimesh->buffer_set = false;
+	p_multimesh->motion_vectors_enabled = false;
+	p_multimesh->motion_vectors_current_offset = 0;
+	p_multimesh->motion_vectors_previous_offset = 0;
+	p_multimesh->motion_vectors_last_change = -1;
+	p_multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MULTIMESH);
+}
+
 Error MeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transform_buffer, int p_pool_record_capacity, RID p_indirect_command_buffer, int p_command_byte_offset) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	if (!multimesh) {
@@ -1627,40 +1658,11 @@ Error MeshStorage::multimesh_attach_shared_buffers(RID p_multimesh, RID p_transf
 	if (RSG::viewport->get_num_viewports_with_motion_vectors() > 0 || RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() > 0) {
 		return ERR_UNAVAILABLE;
 	}
-	// All validation precedes mutation: failed rebinds preserve the old view.
-	_multimesh_clear_shared_uniform_sets(multimesh);
-	multimesh->shared_buffers = true;
-	multimesh->shader_driven = false;
-	multimesh->shader_motion_vectors = false;
-	multimesh->buffer = p_transform_buffer;
-	multimesh->command_buffer = p_indirect_command_buffer;
-	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
-	multimesh->shared_draw_command_count = 1;
-	multimesh->shared_draw_command_stride = 0;
-	multimesh->shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
-	multimesh->instances = p_pool_record_capacity;
-	multimesh->visible_instances = -1;
-	multimesh->indirect = true;
-	multimesh->xform_format = RSE::MULTIMESH_TRANSFORM_3D;
-	multimesh->uses_colors = false;
-	multimesh->uses_custom_data = false;
-	multimesh->stride_cache = 12;
-	multimesh->color_offset_cache = 12;
-	multimesh->custom_data_offset_cache = 12;
-	multimesh->buffer_set = false;
-	multimesh->motion_vectors_enabled = false;
-	multimesh->motion_vectors_current_offset = 0;
-	multimesh->motion_vectors_previous_offset = 0;
-	multimesh->motion_vectors_last_change = -1;
-	multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MULTIMESH);
+	_multimesh_commit_shared_view(multimesh, p_pool_record_capacity, p_transform_buffer, p_indirect_command_buffer, uint32_t(p_command_byte_offset), 1, 0, RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP, false, false);
 	return OK;
 }
 
-Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors) {
-	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
-	if (!multimesh) {
-		return ERR_INVALID_PARAMETER;
-	}
+Error MeshStorage::_multimesh_validate_shared_draw_buffer(MultiMesh *multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors) {
 	if (OS::get_singleton()->get_current_rendering_method() != "forward_plus" || OS::get_singleton()->get_current_rendering_driver_name() != "vulkan") {
 		return ERR_UNAVAILABLE;
 	}
@@ -1691,33 +1693,19 @@ Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_dr
 	if (!p_use_shader_motion_vectors && (RSG::viewport->get_num_viewports_with_motion_vectors() > 0 || RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() > 0)) {
 		return ERR_UNAVAILABLE;
 	}
-	// Borrow only the command range. No transform allocation, upload or contents readback.
-	// All validation precedes mutation: failed rebinds preserve the old view.
-	_multimesh_clear_shared_uniform_sets(multimesh);
-	multimesh->shared_buffers = true;
-	multimesh->shader_driven = true;
-	multimesh->shader_motion_vectors = p_use_shader_motion_vectors;
-	multimesh->buffer = RID();
-	multimesh->command_buffer = p_indirect_command_buffer;
-	multimesh->command_byte_offset = uint32_t(p_command_byte_offset);
-	multimesh->shared_draw_command_count = 1;
-	multimesh->shared_draw_command_stride = 0;
-	multimesh->shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
-	multimesh->instances = p_draw_slot_capacity;
-	multimesh->visible_instances = -1;
-	multimesh->indirect = true;
-	multimesh->xform_format = RSE::MULTIMESH_TRANSFORM_3D;
-	multimesh->uses_colors = false;
-	multimesh->uses_custom_data = false;
-	multimesh->stride_cache = 0;
-	multimesh->color_offset_cache = 0;
-	multimesh->custom_data_offset_cache = 0;
-	multimesh->buffer_set = false;
-	multimesh->motion_vectors_enabled = false;
-	multimesh->motion_vectors_current_offset = 0;
-	multimesh->motion_vectors_previous_offset = 0;
-	multimesh->motion_vectors_last_change = -1;
-	multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MULTIMESH);
+	return OK;
+}
+
+Error MeshStorage::multimesh_attach_shared_draw_buffer(RID p_multimesh, int p_draw_slot_capacity, RID p_indirect_command_buffer, int p_command_byte_offset, bool p_use_shader_motion_vectors) {
+	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	if (!multimesh) {
+		return ERR_INVALID_PARAMETER;
+	}
+	const Error error = _multimesh_validate_shared_draw_buffer(multimesh, p_draw_slot_capacity, p_indirect_command_buffer, p_command_byte_offset, p_use_shader_motion_vectors);
+	if (error != OK) {
+		return error;
+	}
+	_multimesh_commit_shared_view(multimesh, p_draw_slot_capacity, RID(), p_indirect_command_buffer, uint32_t(p_command_byte_offset), 1, 0, RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP, true, p_use_shader_motion_vectors);
 	return OK;
 }
 
@@ -1739,16 +1727,51 @@ Error MeshStorage::multimesh_attach_shared_draw_command_span(RID p_multimesh, in
 	if (!rd->storage_buffer_is_valid(p_indirect_command_buffer, span.end, true)) {
 		return ERR_INVALID_PARAMETER;
 	}
-	// Reuse every existing topology, ownership, interpolation and history guard.
-	// This call is transactional; the extra span checks above precede all mutation.
-	const Error attach_error = multimesh_attach_shared_draw_buffer(p_multimesh, span.capacity, p_indirect_command_buffer, int(span.offset), p_use_shader_motion_vectors);
+	// Reuse E5 guards, then publish the entire span before one notification.
+	const Error attach_error = _multimesh_validate_shared_draw_buffer(multimesh, span.capacity, p_indirect_command_buffer, int(span.offset), p_use_shader_motion_vectors);
 	if (attach_error != OK) {
 		return attach_error;
 	}
-	multimesh->shared_draw_command_count = span.count;
-	multimesh->shared_draw_command_stride = span.stride;
-	multimesh->shared_draw_submission_mode = p_submission_mode;
+	_multimesh_commit_shared_view(multimesh, span.capacity, RID(), p_indirect_command_buffer, span.offset, span.count, span.stride, p_submission_mode, true, p_use_shader_motion_vectors);
 	return OK;
+}
+
+Error MeshStorage::multimesh_attach_shared_draw_command_span_count(RID p_multimesh, int64_t p_draw_slot_capacity, RID p_commands, int64_t p_command_byte_offset, RID p_count_buffer, int64_t p_count_byte_offset, int64_t p_maximum_count, int64_t p_command_byte_stride, bool p_use_shader_motion_vectors) {
+	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	if (!multimesh) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (OS::get_singleton()->get_current_rendering_method() != "forward_plus" || OS::get_singleton()->get_current_rendering_driver_name() != "vulkan") {
+		return ERR_UNAVAILABLE;
+	}
+	RD *rd = RD::get_singleton();
+	RendererSharedDraw::CountedCommandSpan span;
+	const Error layout_error = RendererSharedDraw::validate_counted_command_span(p_draw_slot_capacity, p_command_byte_offset, p_maximum_count, p_command_byte_stride, p_count_byte_offset, p_commands == p_count_buffer, rd->get_device_driver()->get_indirect_draw_count_limit(), span);
+	if (layout_error != OK) {
+		return layout_error;
+	}
+	// Shared with RD submission: rejects foreign/freed/wrong-usage/persistent banks
+	// and validates their full maximum ranges without an active list or readback.
+	const Error bank_error = rd->validate_draw_indirect_count_buffers(true, p_commands, p_command_byte_offset, p_count_buffer, p_count_byte_offset, p_maximum_count, p_command_byte_stride);
+	if (bank_error != OK) {
+		return bank_error;
+	}
+	const Error attach_error = _multimesh_validate_shared_draw_buffer(multimesh, span.commands.capacity, p_commands, int(span.commands.offset), p_use_shader_motion_vectors);
+	if (attach_error != OK) {
+		return attach_error;
+	}
+	_multimesh_commit_shared_view(multimesh, span.commands.capacity, RID(), p_commands, span.commands.offset, span.commands.count, span.commands.stride, RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT, true, p_use_shader_motion_vectors, p_count_buffer, span.count_offset);
+	return OK;
+}
+
+RID MeshStorage::multimesh_get_shared_draw_count_buffer_rd_rid(RID p_multimesh) const {
+	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	return multimesh && multimesh->shared_buffers && multimesh->shared_draw_submission_mode == RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT ? multimesh->shared_draw_count_buffer : RID();
+}
+
+int MeshStorage::multimesh_get_shared_draw_count_byte_offset(RID p_multimesh) const {
+	const MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+	return multimesh && multimesh->shared_buffers && multimesh->shared_draw_submission_mode == RSE::MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT ? int(multimesh->shared_draw_count_byte_offset) : 0;
 }
 
 int MeshStorage::multimesh_get_shared_draw_command_count(RID p_multimesh) const {
@@ -1780,6 +1803,8 @@ void MeshStorage::multimesh_detach_shared_buffers(RID p_multimesh) {
 	multimesh->shared_draw_command_count = 0;
 	multimesh->shared_draw_command_stride = 0;
 	multimesh->shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
+	multimesh->shared_draw_count_buffer = RID();
+	multimesh->shared_draw_count_byte_offset = 0;
 	multimesh->shared_buffers = false;
 	multimesh->shader_driven = false;
 	multimesh->shader_motion_vectors = false;
@@ -1813,6 +1838,8 @@ void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RSE
 	multimesh->shared_draw_command_count = 0;
 	multimesh->shared_draw_command_stride = 0;
 	multimesh->shared_draw_submission_mode = RSE::MULTIMESH_INDIRECT_SUBMISSION_LOOP;
+	multimesh->shared_draw_count_buffer = RID();
+	multimesh->shared_draw_count_byte_offset = 0;
 	multimesh->shader_motion_vectors = false;
 
 	if (multimesh->instances == p_instances && multimesh->xform_format == p_transform_format && multimesh->uses_colors == p_use_colors && multimesh->uses_custom_data == p_use_custom_data) {

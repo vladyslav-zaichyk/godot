@@ -26,19 +26,23 @@ The two stages remain independently reviewable:
    view, transactional attachment/reset/query behavior, Forward+ routing and
    a procedural source consumer. Production integration remains separate.
 
-E10a implements the RD stage and the small source consumer. E10b remains a
-proposal: there is no counted MultiMesh attachment in this candidate.
-Adoption requires applicable R14/future-workload measurements.
+E10a implements the RD stage and the small source consumer. This branch also
+implements the experimental E10b native attachment and
+[bounded MultiMesh consumer](../counted_multimesh_lab/README.md). The original
+E10a bundle at native `82e80df4074789810a169959f6fe0ce8874ffc76` remains unchanged
+and has no native counted attachment. Adoption requires applicable
+R14/future-workload measurements.
 
-The detailed [E10b MultiMesh GPU count contract](E10B_CONTRACT.md) defines the
-next patch, including transactional counter attachment, checked native bindings,
-explicit main-view pass routing and separate numerical/performance gates.
-It is a design contract; the E10a build and API remain unchanged.
+The detailed [E10b MultiMesh GPU count contract](E10B_CONTRACT.md) describes
+transactional counter attachment, checked native bindings, explicit main-view
+pass routing and separate numerical/performance gates. The new E10b candidate
+has its own native/fixture source and SDK identities; it does not replace the
+E10a bundle or inherit GPU qualification from it.
 
-## Proposed API and scope
+## API and scope
 
-The RD signature is implemented; the RenderingServer signature below is the
-future E10b proposal. Numeric inputs retain signed 64-bit values until checked:
+Both signatures are implemented in the E10b branch. Numeric inputs retain signed
+64-bit values until checked:
 
 ```cpp
 Error RenderingDevice::draw_list_draw_indirect_count(
@@ -59,8 +63,7 @@ are public queries (C#: `Features.DrawIndirectCount` and
 `Limit.MaxDrawIndirectCount`). The limit is zero when unsupported and otherwise is the
 count-specific physical maximum, independent of ordinary multidraw support.
 
-The following native-view rules belong to future E10b. Append
-a distinct counted submission enum value; old span attachment must reject it
+E10b appends a distinct counted submission enum value; old span attachment rejects it
 because that API supplies no counter. Existing command-count queries return
 the configured maximum in counted mode, never a GPU readback. Add count RID
 and byte-offset queries. Every successful old attachment/reset clears counted

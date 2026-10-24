@@ -2808,6 +2808,27 @@
 				Query offset/count/stride/mode through the corresponding read-only methods. A successful old single-command or transform-backed attachment resets count to 1, stride to 0 and mode to LOOP. Detach clears the metadata without freeing borrowed storage. Keep every dependency alive until queued and in-flight uses retire; frame callbacks are not GPU fences. GPU correctness, temporal quality and performance require separate qualification.
 			</description>
 		</method>
+		<method name="multimesh_attach_shared_draw_command_span_count">
+			<return type="int" enum="Error" />
+			<param index="0" name="multimesh" type="RID" />
+			<param index="1" name="draw_slot_capacity" type="int" />
+			<param index="2" name="commands" type="RID" />
+			<param index="3" name="command_byte_offset" type="int" />
+			<param index="4" name="count_buffer" type="RID" />
+			<param index="5" name="count_byte_offset" type="int" />
+			<param index="6" name="maximum_count" type="int" />
+			<param index="7" name="command_byte_stride" type="int" />
+			<param index="8" name="use_shader_motion_vectors" type="bool" default="false" />
+			<description>
+				Experimental Arena extension: borrows an indexed indirect command span and one GPU-written uint32 counter for a shader-driven MultiMesh. Supported by Vulkan/Forward+ with enabled indirect-count and indirect-first-instance capabilities. Call on the rendering thread using [method call_on_render_thread]; RenderingServer retains its normal synchronous marshaling. Set an immutable mesh with exactly one indexed triangle surface and finite, nonempty local custom bounds before attaching. Native mesh LODs, shadow meshes, blend shapes, colors/custom data and CPU interpolation are unavailable. All commands share the same owner, geometry bindings, material, push constants and lighting state. No transform, command, counter or history storage is allocated, copied or read back.
+				The original signed 64-bit numeric inputs are independently checked before narrowing. [param draw_slot_capacity] is between 1 and INT32_MAX and bounds the highest addressed draw slot, not a sum of instance counts. Offsets are nonnegative, 4-byte aligned and at most INT32_MAX. Stride is between 20 and INT32_MAX bytes and 4-byte aligned, including at maximum one. [param maximum_count] is between 1 and 1024 and respects the enabled count-specific physical device limit, including at maximum one; ordinary multidraw support is not a substitute. The full range [code]command_byte_offset + (maximum_count - 1) * command_byte_stride + 20[/code] and the four counter bytes must fit their buffers and the RD uint32 byte-size domain, even when the published count will be zero.
+				Both RIDs must be live storage buffers from the global RenderingDevice with [constant RenderingDevice.STORAGE_BUFFER_USAGE_DISPATCH_INDIRECT] usage and without dynamic persistent storage. They may be the same RID only when the counter's four bytes do not overlap the entire maximum command interval, including stride padding. Prefix and disjoint suffix counters are allowed. Commands and counter cannot also be shader, vertex or index inputs anywhere in the same draw list, including another owner or subpass; ID/state/geometry data needs different buffers.
+				The producer publishes a dense prefix of complete legal indexed commands and a count between zero and [param maximum_count]. Bound reservations before writing, publish zero and reject the run on producer overflow, and use a separate overflow diagnostic. GPU clamping is not an overflow policy: the raw count must also respect the physical device limit. Every potentially consumed command must have mesh-compatible geometry ranges and satisfy [code]firstInstance + instanceCount &lt;= draw_slot_capacity[/code] using overflow-safe arithmetic. INSTANCE_ID includes firstInstance. Order reset, production/scatter, compaction, publication and consumption through tracked global-RD dependencies; retain one coherent snapshot through the last permitted consumer. A single invocation cannot globally reset other workgroups' append counter within one dispatch.
+				A successful attachment selects [constant MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT]. [method multimesh_get_shared_draw_command_count] returns the configured maximum, never the GPU-written count; runtime zero leaves the view attached. Query the borrowed counter with [method multimesh_get_shared_draw_count_buffer_rd_rid] and [method multimesh_get_shared_draw_count_byte_offset]. Expected metadata/bank errors quietly return [constant ERR_INVALID_PARAMETER], unsupported backend/capability/history returns [constant ERR_UNAVAILABLE], and conflicting existing allocation/interpolation returns [constant ERR_ALREADY_IN_USE]. Multiple simultaneous failures have no promised precedence. Failed replacement preserves the complete previous view and its caches. Successful old attachment methods clear counter metadata; detach and destruction never reset or free caller buffers.
+				Every effective material must declare [code]shader_driven_instances[/code] without POINT_SIZE. The independent [param use_shader_motion_vectors] flag defaults false and preserves existing motion-demand guards. When true, materials additionally require [code]shader_driven_motion_vectors[/code]; both current and previous evaluations must resolve the same current slot to the same stable identity after compaction/reordering. The caller owns history validity and synchronization. Initial counted routing permits single-view main opaque color/depth and explicitly admitted shader-history motion variants. Shadows, secondary probes/captures, collider passes, transparency, XR and bake/SDF routes are skipped with bounded diagnostics; combinations require separate qualification. Invalid counted bindings/submissions skip their draw with a bounded diagnostic and no fixed-count or LOOP fallback.
+				The caller owns both banks, mesh and every material BufferRD dependency. Keep them alive until every borrower is detached and queued/in-flight rendering retires under the global RD lifetime rules. A frame callback or fixed frame delay alone is not a GPU fence. CPU mutation of attached MultiMesh data remains forbidden. Metadata queries do not retain resources, validate command contents or qualify GPU correctness, temporal quality, memory usage or performance.
+			</description>
+		</method>
 		<method name="multimesh_create">
 			<return type="RID" />
 			<description>
@@ -2821,7 +2842,7 @@
 			<return type="void" />
 			<param index="0" name="multimesh" type="RID" />
 			<description>
-				Detaches storage attached by [method multimesh_attach_shared_buffers], [method multimesh_attach_shared_draw_buffer] or [method multimesh_attach_shared_draw_command_span] without freeing caller-owned buffers. Leaves an empty ordinary MultiMesh, preserving its mesh and custom bounds. Calling on an ordinary MultiMesh is a no-op. MultiMesh destruction also detaches borrowed storage. Ordinary indirect initialization behavior is unchanged.
+				Detaches storage attached by [method multimesh_attach_shared_buffers], [method multimesh_attach_shared_draw_buffer], [method multimesh_attach_shared_draw_command_span] or [method multimesh_attach_shared_draw_command_span_count] without freeing caller-owned buffers or resetting GPU counters. Clears counted metadata and leaves an empty ordinary MultiMesh, preserving its mesh and custom bounds. Calling on an ordinary MultiMesh is a no-op. MultiMesh destruction also detaches borrowed storage. Ordinary indirect initialization behavior is unchanged.
 			</description>
 		</method>
 		<method name="multimesh_get_aabb" qualifiers="const">
@@ -2902,7 +2923,7 @@
 			<return type="int" />
 			<param index="0" name="multimesh" type="RID" />
 			<description>
-				Returns the fixed allocated command count, including zero-instance slots. Old shared attachments report 1; ordinary, detached and invalid views report 0. This is CPU metadata, not a GPU-visible instance count.
+				Returns the fixed allocated command count, including zero-instance slots, or the configured maximum for a counted view attached with [method multimesh_attach_shared_draw_command_span_count]. The latter does not change when the GPU-written count changes or becomes zero. Old shared attachments report 1; ordinary, detached and invalid views report 0. This is CPU metadata, never a GPU counter readback.
 			</description>
 		</method>
 		<method name="multimesh_get_shared_draw_command_stride" qualifiers="const">
@@ -2910,6 +2931,20 @@
 			<param index="0" name="multimesh" type="RID" />
 			<description>
 				Returns the attached E9 command stride in bytes. Old single-command attachments and ordinary, detached or invalid views report 0. A failed rebind preserves the old value.
+			</description>
+		</method>
+		<method name="multimesh_get_shared_draw_count_buffer_rd_rid" qualifiers="const">
+			<return type="RID" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Returns the caller-owned global RenderingDevice counter bank configured by [method multimesh_attach_shared_draw_command_span_count]. Invalid, ordinary, detached and non-counted views return an invalid RID. This describes the stored attachment, not whether the caller has incorrectly freed its bank. It neither reads the published count nor retains storage. Detaching, destroying or rebinding a borrower never frees or resets this buffer.
+			</description>
+		</method>
+		<method name="multimesh_get_shared_draw_count_byte_offset" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="multimesh" type="RID" />
+			<description>
+				Returns the configured byte offset of the four-byte GPU counter for [method multimesh_attach_shared_draw_command_span_count]. It is 4-byte aligned and fits a nonnegative signed 32-bit value. Invalid, ordinary, detached and non-counted views return 0. Offset 0 is also legal for a counted view; inspect [method multimesh_get_shared_draw_submission_mode] or [method multimesh_get_shared_draw_count_buffer_rd_rid] to distinguish it. Failed replacement preserves the previous offset; this query never reads GPU contents.
 			</description>
 		</method>
 		<method name="multimesh_get_shared_draw_submission_mode" qualifiers="const">
@@ -5162,6 +5197,9 @@
 		</constant>
 		<constant name="MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW" value="1" enum="MultimeshIndirectSubmissionMode">
 			Submit the compatible E9 command span in one RD call. Unsupported multi-command counts fail attachment without automatic fallback.
+		</constant>
+		<constant name="MULTIMESH_INDIRECT_SUBMISSION_MULTI_DRAW_COUNT" value="2" enum="MultimeshIndirectSubmissionMode">
+			Submit a GPU-counted indexed prefix of a compatible command span in one RD call. Only [method multimesh_attach_shared_draw_command_span_count] can create this view; [method multimesh_attach_shared_draw_command_span] rejects this value. Count-specific support is required even at maximum one. No fixed-count or LOOP fallback is selected, and CPU command-count queries return the configured maximum rather than reading the GPU counter.
 		</constant>
 		<constant name="MULTIMESH_INTERP_QUALITY_FAST" value="0" enum="MultimeshPhysicsInterpolationQuality">
 			MultiMesh physics interpolation favors speed over quality.
