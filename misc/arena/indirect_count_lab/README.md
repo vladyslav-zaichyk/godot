@@ -50,7 +50,8 @@ Error RenderingServer::multimesh_attach_shared_draw_command_span_count(
 
 E10a preserves the old RD uint32 signature, E9 API and existing enum values.
 `Features.SUPPORTS_DRAW_INDIRECT_COUNT` and `Limit.LIMIT_MAX_DRAW_INDIRECT_COUNT`
-are public queries. The limit is zero when unsupported and otherwise is the
+are public queries (C#: `Features.DrawIndirectCount` and
+`Limit.MaxDrawIndirectCount`). The limit is zero when unsupported and otherwise is the
 count-specific physical maximum, independent of ordinary multidraw support.
 
 The following native-view rules belong to future E10b. Append

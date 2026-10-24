@@ -49,7 +49,7 @@ public partial class IndirectCountContract : Node
             _rd = RenderingServer.GetRenderingDevice() ?? throw new Exception("Global RD unavailable.");
             Engine.MaxFps = 120;
             await OnRender(() => {
-                _supported = _rd.HasFeature(RenderingDevice.Features.SupportsDrawIndirectCount);
+                _supported = _rd.HasFeature(RenderingDevice.Features.DrawIndirectCount);
                 _deviceLimit = checked((uint)_rd.LimitGet(RenderingDevice.Limit.MaxDrawIndirectCount));
                 Check(_supported == (_deviceLimit != 0), "Enabled count feature/limit disagree.");
                 CreatePersistent(); _ownedBaseline = _owned.Count;
