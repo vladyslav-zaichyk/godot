@@ -58,6 +58,15 @@ after the renderer A/B slot is released. No FPS benefit is claimed for this fix.
 
 ## Next correctness work
 
+E12b now implements these follow-ups in a separate candidate. See
+[the checked API contract](E12B_CONTRACT.md) and the
+[six-case numerical stand](../checked_compute_lab/README.md).
+Native commit `7d59f5064a6cd40a1cf2aaa578b8e90d29d1cbe8` built successfully
+with its exact generated .NET SDK; 106 CPU cases / 15,631 assertions passed.
+GPU recovery, driver behavior and performance remain unqualified until the
+parallel A/B slot is released. The earlier E12a evidence below remains specific
+to its source patch, rather than a claim about this new candidate.
+
 Two independent findings remain outside this patch:
 
 | Finding at the audit base | Safe first consumer rule | Required follow-up |

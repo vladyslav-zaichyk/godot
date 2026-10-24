@@ -86,6 +86,31 @@ TEST_CASE("[Rendering][IndirectDraw][IndirectDispatch] Small spans agree with an
 	}
 }
 
+TEST_CASE("[Rendering][IndirectDraw][CheckedCompute] Signed metadata is rejected before narrowing") {
+	for (int64_t offset : { INT64_MIN, int64_t(-4), int64_t(-1), int64_t(UINT32_MAX) + 1, int64_t(UINT32_MAX) + 5, INT64_MAX }) {
+		CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(UINT64_MAX, offset, true, false) == ERR_INVALID_PARAMETER);
+	}
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(16, 4, true, false) == OK);
+}
+
+TEST_CASE("[Rendering][IndirectDraw][CheckedCompute] Indirect usage and nonpersistent storage are mandatory") {
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(16, 4, true, false) == OK);
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(16, 4, false, false) == ERR_INVALID_PARAMETER);
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(16, 4, true, true) == ERR_INVALID_PARAMETER);
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(16, 4, false, true) == ERR_INVALID_PARAMETER);
+}
+
+TEST_CASE("[Rendering][IndirectDraw][CheckedCompute] Checked buffers retain complete twelve byte range rules") {
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(12, 0, true, false) == OK);
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(11, 0, true, false) == ERR_INVALID_PARAMETER);
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(16, 4, true, false) == OK);
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(15, 4, true, false) == ERR_INVALID_PARAMETER);
+	CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(8, UINT32_MAX - 3, true, false) == ERR_INVALID_PARAMETER);
+	for (int64_t offset : { int64_t(1), int64_t(2), int64_t(3), int64_t(UINT32_MAX) }) {
+		CHECK(RenderingDeviceIndirect::validate_dispatch_buffer(UINT64_MAX, offset, true, false) == ERR_INVALID_PARAMETER);
+	}
+}
+
 TEST_CASE("[Rendering][IndirectDraw] Every call requires aligned command offset") {
 	for (bool indexed : { false, true }) {
 		for (uint32_t count : { 0u, 1u, 2u }) {

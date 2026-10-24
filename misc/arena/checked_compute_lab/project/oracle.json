@@ -1,0 +1,38 @@
+{
+  "contract": "checked-compute-oracle-v1",
+  "assembly": "CheckedComputeLab",
+  "inputs": ["CheckedComputeLab.csproj", "project.godot", "Main.tscn", "Main.cs", "ProbeLogger.cs", "oracle.json"],
+  "cases": {
+    "metadata_recovery": {
+      "calls": [["bind",0],["produce",0],["bind",0],["wrong_list",31],["missing_rid",31],["negative",31],["unaligned",31],["past_end",31],["wrap",31],["wide",31],["signed_max",31],["no_indirect",31],["persistent",31],["wrong_owner",31],["foreign_device",31],["bad_index",31],["zero_direct",31],["failed_candidate_not_reserved",0],["restore_consumer",0],["valid_recovery",0]],
+      "probes": [["recovered",[[11,0,1]]]]
+    },
+    "pending_and_recorded_aliases": {
+      "calls": [["bind",0],["produce",0],["bind",0],["ro_pending_reject",31],["ro_pending_recovery",0],["bind",0],["ro_record_shader",0],["bind",0],["ro_recorded_reject",31],["ro_recorded_recovery",0],["bind",0],["rw_pending_reject",31],["rw_pending_recovery",0],["bind",0],["rw_record_shader",0],["bind",0],["rw_recorded_reject",31],["rw_recorded_recovery",0]],
+      "probes": [["ro_pending",[[21,2,1]]],["ro_recorded",[[22,2,1],[23,0,1]]],["rw_pending",[[21,2,1]]],["rw_recorded",[[22,2,1],[23,0,1]]]]
+    },
+    "arguments_first_recovery": {
+      "calls": [["bind",0],["produce",0],["bind",0],["reserve",0],["reject_ro_bind",31],["retained_direct",0],["reject_rw_bind",31],["retained_indirect",0]],
+      "probes": [["retained",[[31,0,3]]]]
+    },
+    "dormant_pipeline_activation": {
+      "calls": [["bind",0],["produce",0],["bind",0],["stage_dormant",0],["reserve_with_dormant",0],["activated_direct_reject",31],["activated_indirect_reject",31],["replace_dormant",0],["activated_recovery",0]],
+      "probes": [["dormant_recovered",[[41,0,1],[42,2,1]]]]
+    },
+    "barriers_end_repeat_zero": {
+      "calls": [["bind",0],["produce",0],["bind",0],["producer_before_barrier",0],["bind",0],["zero_first",0],["zero_reserved_bind_reject",31],["first",0],["repeated_offset",0],["zero_groups",0],["bind",0],["end_reuse",0],["bind",0],["producer_for_restore",0],["restored_producer_reject",31],["restored_producer_direct",0],["bind",0],["recorded_after_barrier_reject",31],["after_second_barrier",0],["bind",0],["before_role_change",0],["bind",0],["barrier_role_change",0]],
+      "probes": [["repeat_zero",[[51,0,2]]],["end_reuse",[[52,2,1]]],["restored_producer",[[53,0,1]]],["barrier_reuse",[[54,0,1],[55,2,1]]]]
+    },
+    "push_constant_history": {
+      "calls": [["bind",0],["produce",0],["bind",0],["pc_a",0],["bind_b",0],["missing_pc",31],["missing_pc_after_barrier",31],["missing_pc_indirect",31],["pc_recovery",0],["supplied_pc_restore",0],["bind",0],["before_zero_pc",0],["bind_zero_pc",0],["zero_pc_after_barrier",0]],
+      "probes": [["pc_recovered",[[61,0,1],[62,0,2]]],["zero_pc_pipeline",[[64,0,1],[63,0,1]]]]
+    }
+  },
+  "not_qualified": [
+    "Wrong-list legacy barrier and legacy void diagnostics need a separate exact diagnostic budget",
+    "No real UBO alias: indirect storage owners cannot bind through the uniform-buffer owner API",
+    "No dormant high-slot restoration across a smaller pipeline, freed-resource abuse, texture alias or cross-queue qualification",
+    "No full release-driver runtime proof: the editor still defines DEBUG_ENABLED",
+    "No performance, physical VRAM, native MultiMesh, animation or scheduling result"
+  ]
+}

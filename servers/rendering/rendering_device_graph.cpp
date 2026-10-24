@@ -2101,6 +2101,11 @@ void RenderingDeviceGraph::add_compute_list_uniform_set_prepare_for_use(RDD::Sha
 	instruction->set_index = set_index;
 }
 
+bool RenderingDeviceGraph::is_compute_list_usage_compatible(const ResourceTracker *p_tracker, ResourceUsage p_usage) const {
+	// Preflight must not reset a tracker or change a previously recorded segment.
+	return p_tracker == nullptr || p_tracker->command_frame != tracking_frame || p_tracker->compute_list_index != compute_instruction_list.index || p_tracker->compute_list_usage == p_usage;
+}
+
 void RenderingDeviceGraph::add_compute_list_usage(ResourceTracker *p_tracker, ResourceUsage p_usage) {
 	DEV_ASSERT(p_tracker != nullptr);
 

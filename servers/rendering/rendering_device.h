@@ -1650,6 +1650,8 @@ private:
 
 	struct ComputeList {
 		bool active = false;
+		// Whole argument-bank reservations last until this graph segment ends.
+		HashSet<RDG::ResourceTracker *> indirect_trackers;
 		struct SetState {
 			uint32_t pipeline_expected_format = 0;
 			uint32_t uniform_set_format = 0;
@@ -1668,6 +1670,7 @@ private:
 			uint32_t local_group_size[3] = { 0, 0, 0 };
 			uint8_t push_constant_data[MAX_PUSH_CONSTANT_SIZE] = {};
 			uint32_t push_constant_size = 0;
+			bool push_constant_supplied = false;
 			uint32_t dispatch_count = 0;
 		} state;
 
@@ -1688,6 +1691,8 @@ private:
 
 	ComputeList compute_list;
 	ComputeList::State compute_list_barrier_state;
+	bool _compute_list_uniform_set_has_indirect_alias(const UniformSet *p_uniform_set) const;
+	Error _compute_list_validate_uniform_sets(const Buffer *p_arguments = nullptr);
 
 public:
 	ComputeListID compute_list_begin();
@@ -1697,6 +1702,9 @@ public:
 	void compute_list_dispatch(ComputeListID p_list, uint32_t p_x_groups, uint32_t p_y_groups, uint32_t p_z_groups);
 	void compute_list_dispatch_threads(ComputeListID p_list, uint32_t p_x_threads, uint32_t p_y_threads, uint32_t p_z_threads);
 	void compute_list_dispatch_indirect(ComputeListID p_list, RID p_buffer, uint32_t p_offset);
+	Error compute_list_bind_uniform_set_checked(ComputeListID p_list, RID p_uniform_set, uint32_t p_index);
+	Error compute_list_dispatch_checked(ComputeListID p_list, uint32_t p_x_groups, uint32_t p_y_groups, uint32_t p_z_groups);
+	Error compute_list_dispatch_indirect_checked(ComputeListID p_list, RID p_buffer, int64_t p_offset);
 	void compute_list_add_barrier(ComputeListID p_list);
 
 	void compute_list_end();

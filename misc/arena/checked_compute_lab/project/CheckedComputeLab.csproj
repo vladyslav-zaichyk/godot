@@ -1,0 +1,11 @@
+<Project>
+  <Sdk Name="Godot.NET.Sdk" Version="$(ArenaGodotSdkVersion)" />
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <Optimize>true</Optimize>
+    <AssemblyName>CheckedComputeLab</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup><AssemblyMetadata Include="GodotSdkVersion" Value="$(ArenaGodotSdkVersion)" /></ItemGroup>
+</Project>
