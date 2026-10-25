@@ -16,6 +16,11 @@ bounds, near-plane uncertainty, current camera/depth, projection/extent changes,
 uncertified proofs and death/refill. Start with the existing certified whole
 animation envelope. TAA/E8 and eight LOD owners follow separate gates.
 
+The next [E13c TAA/E8 contract](../taa/CONTRACT.md) and its numerical plan are
+design artifacts only. They do not enable TAA in this native stand or qualify
+the combined path on an existing editor. Native implementation/build work waits
+for acceptance of the independent E13b perspective gate.
+
 The stand uses one actual 64x32 orthographic SubViewport, Vulkan Forward+, no
 MSAA/TAA/GI/shadows and public Bilinear scaling at scale1 (the viewport normalizes
 this to native scaling OFF). Two selected white ordinary wall owners leave a

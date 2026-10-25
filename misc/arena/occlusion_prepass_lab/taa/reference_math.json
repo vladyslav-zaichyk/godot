@@ -1,0 +1,126 @@
+{
+  "contract": "arena-e13c-perspective-motion-reference-v1",
+  "status": "analytic_CPU_only",
+  "formula": "a_i=lambda_i/C_i.w; interpolate C and P as vec4 before divide; velocity=.5*((Pndc-Jprev)-(Cndc-Jcurrent))",
+  "counterexample": {
+    "screen_barycentrics": [
+      0.25,
+      0.25,
+      0.5
+    ],
+    "current_clip": [
+      [
+        -0.5,
+        -0.5,
+        0.7,
+        1
+      ],
+      [
+        1,
+        -1,
+        1.2,
+        2
+      ],
+      [
+        0,
+        2,
+        2,
+        4
+      ]
+    ],
+    "previous_clip": [
+      [
+        -0.38,
+        -0.5,
+        0.71,
+        1.25
+      ],
+      [
+        1.12,
+        -1,
+        1.21,
+        2.25
+      ],
+      [
+        0.12,
+        2,
+        2.01,
+        4.25
+      ]
+    ],
+    "current_jitter": [
+      0,
+      0
+    ],
+    "previous_jitter": [
+      0,
+      0
+    ],
+    "expected_velocity_rational": [
+      "2/75",
+      "0"
+    ],
+    "expected_velocity": [
+      0.02666666666666667,
+      0
+    ],
+    "orthographic_shortcut_velocity": [
+      0.031281045751633985,
+      0.012091503267973857
+    ],
+    "naive_expected_values_recomputed_by_CPU_check": true,
+    "minimum_naive_error_uv_each_component": 0.001953125,
+    "current_depth_rational": "23/40",
+    "current_depth": 0.575,
+    "abstract_clip_vectors_not_a_certified_runtime_mesh_transform": true,
+    "orthographic_shortcut_rational": [
+      "2393/76500",
+      "37/3060"
+    ]
+  },
+  "jitter_only": {
+    "base_clip": [
+      [
+        -0.5,
+        -0.5,
+        0.7,
+        1
+      ],
+      [
+        1,
+        -1,
+        1.2,
+        2
+      ],
+      [
+        0,
+        2,
+        2,
+        4
+      ]
+    ],
+    "screen_barycentrics": [
+      0.25,
+      0.25,
+      0.5
+    ],
+    "current_jitter": [
+      0.0078125,
+      -0.015625
+    ],
+    "previous_jitter": [
+      -0.0078125,
+      0.015625
+    ],
+    "construction": "Add jitter.xy*clip.w to base.xy for each current/previous clip; keep base.zw.",
+    "expected_velocity": [
+      0,
+      0
+    ]
+  },
+  "claims": {
+    "GPU_qualified": false,
+    "shader_compiled": false,
+    "actual_VAT_qualified": false
+  }
+}
