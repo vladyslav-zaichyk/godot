@@ -1,6 +1,6 @@
 {
   "contract": "arena-e13c-native-taa-e8-plan-v2",
-  "status": "native_implemented_fixture_prepared_GPU_pending",
+  "status": "native_and_fixture_built_GPU_pending",
   "created_date": "2026-10-25",
   "audit_source_commit": "a5e1a2135cd673f00508c6b5b745d34d83f67d81",
   "audit_git_blob_sha256": {
@@ -4245,7 +4245,7 @@
   ],
   "qualification": {
     "native_implementation_present": true,
-    "new_build_present": false,
+    "new_build_present": true,
     "GPU_suite_implemented": true,
     "GPU_run": false,
     "resolved_TAA_quality": false,
@@ -4267,5 +4267,6 @@
   ],
   "combined_actual_viewport_records": 128,
   "native_implementation_commit": "51a2b912f4161aa289d5b1cced99deb41289f1e4",
-  "fixture_payload_status": "128_rows_frozen_in_project/scenarios.json; numerical validators pending final integrated CPU check"
+  "fixture_payload_status": "project/scenarios.json frozen;20 integrated CPU validator tests passed;GPU unexecuted",
+  "new_exact_sdk_version": "4.7.2-arena-dev-g51a2b912f.4"
 }

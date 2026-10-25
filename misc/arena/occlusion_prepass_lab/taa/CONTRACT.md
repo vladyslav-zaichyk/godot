@@ -1,7 +1,7 @@
 # E13c: native TAA, GPU occlusion and E8 history
 
 Status: E13c native implementation at51a2b912f4161aa289d5b1cced99deb41289f1e4,
-2026-10-25; numerical fixture prepared, new editor/SDK build pending. GLSL and
+2026-10-25; numerical fixture prepared, separate native/managed build passed. GLSL and
 GPU qualification require the new exact editor. No E13c GPU result is claimed.
 Audit source: `a5e1a2135cd673f00508c6b5b745d34d83f67d81`.
 The existing E13b editor remains native
@@ -43,9 +43,9 @@ off-center frusta and generic compositor effects. Retain every other E13b/E8
 material, geometry, alias, capacity and lifetime restriction. The admitted
 split's opaque auto-instancing cost remains part of later full-frame A/B.
 
-## Admission and proposed diagnostic opt-in
+## Admission and diagnostic opt-in
 
-The later patch deliberately changes both configure-time and render-time TAA
+The patch changes both configure-time and render-time TAA
 admission. Removing only `!using_taa` is insufficient. For a TAA render, require
 all registered consumers to use the E8 attachment flag and an E8-capable
 effective material for both candidate and complete fallback. Preserve non-history
@@ -61,7 +61,7 @@ TAA-off E13b admission stays available with no observer.
 
 The existing E8 capture effect requests motion vectors and uses a compositor;
 E13b rejects both. Freeze an explicit, narrowly identified observer exception
-instead of copying that effect unchanged. Proposed optional fourth argument:
+instead of copying that effect unchanged. Implemented optional fourth argument:
 
 ```cpp
 Error viewport_configure_gpu_occlusion_prepass(
@@ -69,7 +69,8 @@ Error viewport_configure_gpu_occlusion_prepass(
         RID diagnostic_post_opaque_effect = RID());
 ```
 
-This signature is a design target, not an available method overload. Empty RID
+This signature is implemented by E13c and its exact matching SDK. The protected
+E13b editor/SDK still provides the old interface. Empty RID
 keeps three-argument source calls and the existing no-compositor policy. It does
 not promise binary compatibility with old precompiled bindings; use the new
 exact editor/SDK. A nonempty RID requires native TAA and
@@ -115,7 +116,7 @@ clear/load behavior; do not clear velocity after opaque. Background probes must
 catch stale velocity after geometry disappears. Depth, color and both E8 vertex
 evaluations use the same CURRENT selected ID mapping and frozen snapshot.
 
-Proposed outcome keys, reset false at each actual viewport epoch:
+Recording outcome keys, reset false at each actual viewport epoch:
 `opaque_recorded`, `taa_process_recorded`, `taa_history_bootstrap`,
 `frame_recording_completed`. Set opaque only after its draw list closes; set
 TAA process after that call returns; bootstrap records missing history at that
@@ -244,7 +245,8 @@ write clear0 padding without reading outside native depth. Eight mip levels use
 10923 float words plus eight guards =43724 bytes. Each complete producer records
 copy +7reductions +selection +finalizer:10 dispatches,9 barriers; totals1240/1116.
 Observer records one bounded raw-grid dispatch per capture:124 more. Freeze the
-later GLSL stage mapping before executing this numerical plan.
+GLSL stage mapping through the committed CopyDepth/Reduce/Select/Finalize/Capture
+sources and hashes before executing this numerical plan.
 Resource preparation may flush CPU queues while the viewport is disabled; no
 unlisted actual viewport warmups are permitted. If an implementation needs more,
 version the matrix and counts before execution rather than hide rendered frames.
@@ -293,8 +295,12 @@ history commits, TAA recording/bootstrap metadata and no diagnostics. Negative r
 declared quiet rejection and no commit/capture; retained valid fallback is tested
 separately. The receipt must match exact editor/SDK/source/layout/input hashes,
 all128 planned rows, native frame/preparation mapping and resource shutdown.
-The future implementation freezes per-row active/sample expectations and payload
-hashes before GPU execution; this document alone is not an executable GPU suite.
+The committed `project/scenarios.json` freezes active IDs, pose bits, lifecycle
+and camera inputs. Shader sources and payload hashes identify the executable
+fixture. Pixel-selection rules are preregistered: actual pixel maps are chosen
+from the actual current projection before opaque recording, then independently
+recomputed from captured UBOs, never chosen from observed GPU output. New-binary
+E13b/E8 regressions and an explicit GPU slot are still required before acceptance.
 The JSON also lists admission-negative native checks for observer lifetime,
 callback stages/flags, duplicates, graph mutation and unrelated motion demand;
 these are separate from the128 GPU scheduling records.
