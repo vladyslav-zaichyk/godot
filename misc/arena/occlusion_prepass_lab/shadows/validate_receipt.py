@@ -227,17 +227,32 @@ def receiver_sample(point, scene, row, plan, inv):
     return dict(x=x, y=y, world=actual, depth=depth)
 
 
+def expected_lit_group(kind):
+    return kind in ('lit', 'departed_id2')
+
+
 def receiver_probes(rows, scenes, plan):
     """Select common world anchors, never from observed brightness or shadows."""
     row = rows[0]; margin = plan['oracle']['ray_interior_margin']; inverses = [inverse(matrix(s)) for s in scenes]
     groups = {}
-    for caster in [i for i in plan['oracle']['shadow_caster_ids'] if i in row['active_ids']] + ['lit']:
+    casters = [i for i in plan['oracle']['shadow_caster_ids'] if i in row['active_ids']]
+    groups_to_probe = casters + ['lit']
+    if row['state_id'] == 'S05':
+        # The input ledger alone cannot prove an inactive body stopped casting.
+        # Probe the former ID2 box under THIS light, not a cached shadow image.
+        previous = next(record for record in reversed(plan['records'])
+                        if record['state_id'] == 'S04' and 2 in record['active_ids'])
+        require(2 not in row['active_ids'] and row['pose_centers'][2] == previous['pose_centers'][2],
+                'Departed caster does not retain its frozen last pose.')
+        groups_to_probe.append('departed_id2')
+    for caster in groups_to_probe:
         choices = []
         if caster == 'lit':
             anchors = ([x / 5, 0., z / 5] for x in range(-20, 26) for z in range(-15, 26))
             required = plan['oracle']['lit_probes']
         else:
-            center = row['pose_centers'][caster]; ray = row['light_ray']
+            source_id = 2 if caster == 'departed_id2' else caster
+            center = row['pose_centers'][source_id]; ray = row['light_ray']
             # Different heights along the center ray give a long robust witness region.
             anchors = ([center[0] - ray[0] * height / ray[1] + dx, 0.,
                         center[2] - ray[2] * height / ray[1] + dz]
@@ -253,6 +268,12 @@ def receiver_probes(rows, scenes, plan):
                 continue
             if caster == 'lit':
                 if any(light_hits(sample['world'], arm, plan, -margin) for sample, arm in zip(samples, rows)):
+                    continue
+            elif caster == 'departed_id2':
+                if any(light_hits(sample['world'], arm, plan, -margin)
+                       or ray_box(sample['world'], mul(unit(arm['light_ray']), -1),
+                                  body_box(arm, 2, plan, margin)) is None
+                       for sample, arm in zip(samples, rows)):
                     continue
             elif any(caster not in light_hits(sample['world'], arm, plan, margin)
                      or light_hits(sample['world'], arm, plan, -margin) != [caster] for sample, arm in zip(samples, rows)):
@@ -305,8 +326,8 @@ def validate_plan(plan):
             omitted += len(omission_proof(row, scene, plan))
         probes = receiver_probes(rows, scenes, plan)
         visible_box_probes(rows, scenes, plan, row['pose_centers'][0], plan['geometry']['body_size'], plan['oracle']['body_identity_probes'])
-        shadow_probes += sum(len(v) for k, v in probes.items() if k != 'lit')
-        lit_probes += len(probes['lit'])
+        shadow_probes += sum(len(v) for k, v in probes.items() if not expected_lit_group(k))
+        lit_probes += sum(len(v) for k, v in probes.items() if expected_lit_group(k))
     return dict(cpu_plan_passed=True, gpu_executed=False, native_qualified=False, performance_qualified=False,
                 planned_records=COUNT, planned_viewport_records=COUNT + 1, semantic_shadow_probes=shadow_probes,
                 semantic_lit_probes=lit_probes, finite_caster_omission_proofs=omitted)
@@ -443,7 +464,7 @@ def validate(raw, plan, expected, root, gate_mode='reference-boundary'):
                     'Uninvoked producer wrote early-depth ledger.')
         validate_proof(blobs['proof'], index * PROOF_STRIDE, row, previous, serial, callback); previous = row
     require(raw['callbacks'] == callbacks, 'Producer total differs.')
-    shadow_probes = lit_probes = body_probes = zero_body_probes = nonzero_motion = receiver_motion = 0; max_error = 0.; min_delta = math.inf
+    shadow_probes = lit_probes = departed_probes = body_probes = zero_body_probes = nonzero_motion = receiver_motion = 0; max_error = 0.; min_delta = math.inf
     for start in range(0, COUNT, 3):
         rows = plan['records'][start:start + 3]; groups = receiver_probes(rows, scenes[start:start + 3], plan)
         identities = visible_box_probes(rows, scenes[start:start + 3], plan, rows[0]['pose_centers'][0],
@@ -488,9 +509,10 @@ def validate(raw, plan, expected, root, gate_mode='reference-boundary'):
                     lights.append(r)
                 counter, reference, requested = lights
                 require(counter >= plan['oracle']['minimum_counterfactual_light'], 'Caster-off receiver is not visibly lit.')
-                if kind == 'lit':
+                if expected_lit_group(kind):
                     require(min(reference, requested) >= counter * plan['oracle']['minimum_lit_retention'], 'Lit witness unexpectedly shadowed.')
                     lit_probes += 1
+                    departed_probes += int(kind == 'departed_id2')
                 else:
                     delta = counter - reference
                     require(delta >= plan['oracle']['minimum_caster_shadow_delta'], 'Caster-on/off counterfactual has no observable shadow delta.')
@@ -502,7 +524,8 @@ def validate(raw, plan, expected, root, gate_mode='reference-boundary'):
         combined_shadow_occlusion_contract_passed=gate_mode == 'combined-required',
         unsupported_fallback_expected=gate_mode == 'reference-boundary', gpu_executed=True,
         candidate_selected_records=selected, producer_rejected_records=rejected, producer_callbacks=callbacks,
-        receiver_shadow_probes=shadow_probes, receiver_lit_probes=lit_probes, main_body_identity_probes=body_probes,
+        receiver_shadow_probes=shadow_probes, receiver_lit_probes=lit_probes,
+        departed_caster_lit_probes=departed_probes, main_body_identity_probes=body_probes,
         accepted_zero_body_probes=zero_body_probes, nonzero_motion_probes=nonzero_motion,
         nonzero_receiver_motion_probes=receiver_motion, minimum_shadow_delta=min_delta,
         maximum_requested_lighting_error=max_error, native_qualified=False, performance_qualified=False,
