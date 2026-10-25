@@ -237,6 +237,7 @@ private:
 		bool allow_counted_instances = false; // Explicit main single-view opaque/depth purpose only.
 		const HashMap<RenderGeometryInstance *, GpuOcclusionDrawSelection> *gpu_occlusion_selection = nullptr;
 		const LocalVector<uint8_t> *gpu_occlusion_early_surfaces = nullptr;
+		const LocalVector<uint32_t> *gpu_occlusion_depth_repeats = nullptr;
 		bool gpu_occlusion_draw_early = false;
 		bool *gpu_occlusion_submission_failed = nullptr;
 		uint32_t view_count = 1;
@@ -641,6 +642,9 @@ private:
 	PagedAllocator<GeometryInstanceSurfaceDataCache> geometry_instance_surface_alloc;
 	PagedAllocator<GeometryInstanceLightmapSH> geometry_instance_lightmap_sh;
 	uint64_t gpu_occlusion_signature_counter = 0;
+	// Reused CPU-only suffix table. Never rewrites canonical opaque metadata or
+	// uploaded InstanceData; only the two admitted depth phases consume it.
+	LocalVector<uint32_t> gpu_occlusion_depth_repeats;
 	void _gpu_occlusion_mark_metadata_changed(GeometryInstanceForwardClustered *p_instance);
 
 	struct SurfacePipelineData {

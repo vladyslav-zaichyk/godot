@@ -33,6 +33,7 @@
 #include "core/os/os.h"
 
 #include "core/config/project_settings.h"
+#include "servers/rendering/gpu_occlusion_repeat.h"
 #include "servers/rendering/renderer_rd/environment/fog.h"
 #include "servers/rendering/renderer_rd/framebuffer_cache_rd.h"
 #include "servers/rendering/renderer_rd/storage_rd/light_storage.h"
@@ -467,12 +468,16 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 			(p_color_pass_flags & COLOR_PASS_FLAG_MOTION_VECTORS) != 0;
 
 	for (uint32_t i = p_from_element; i < p_to_element; i++) {
+		const RenderElementInfo &element_info = p_params->element_info[i];
+		const uint32_t element_repeat = p_params->gpu_occlusion_depth_repeats ?
+				GpuOcclusionRepeat::bound_repeat((*p_params->gpu_occlusion_depth_repeats)[i], i, p_to_element) :
+				element_info.repeat;
 		if (p_params->gpu_occlusion_early_surfaces &&
 				bool((*p_params->gpu_occlusion_early_surfaces)[i]) != p_params->gpu_occlusion_draw_early) {
+			i += element_repeat - 1;
 			continue;
 		}
 		const GeometryInstanceSurfaceDataCache *surf = p_params->elements[i];
-		const RenderElementInfo &element_info = p_params->element_info[i];
 		auto reject_surface_binding = [&](Error p_error) {
 			if (p_params->gpu_occlusion_submission_failed) {
 				*p_params->gpu_occlusion_submission_failed = true;
@@ -484,7 +489,7 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 				WARN_PRINT(vformat("Forward+ skipped a draw after checked binding or counted submission failed (Error %d).", p_error));
 				surf->owner->indirect_binding_warning = true;
 			}
-			i += element_info.repeat - 1;
+			i += element_repeat - 1;
 		};
 
 		if (surf->owner->shader_driven_instances &&
@@ -494,7 +499,7 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 				WARN_PRINT("Counted MultiMesh draws require the main single-view opaque/depth purpose; secondary, transparent, shadow and XR consumers are skipped.");
 				surf->owner->counted_pass_warning = true;
 			}
-			i += element_info.repeat - 1;
+			i += element_repeat - 1;
 			continue;
 		}
 
@@ -797,7 +802,7 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 
 			RD::get_singleton()->draw_list_set_push_constant(draw_list, &push_constant, push_constant_size);
 
-			uint32_t instance_count = surf->owner->instance_count > 1 ? surf->owner->instance_count : element_info.repeat;
+			uint32_t instance_count = surf->owner->instance_count > 1 ? surf->owner->instance_count : element_repeat;
 			if (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_USES_PARTICLE_TRAILS) {
 				instance_count /= surf->owner->trail_steps;
 			}
@@ -859,7 +864,7 @@ void RenderForwardClustered::_render_list_template(RenderingDevice::DrawListID p
 			*p_params->gpu_occlusion_submission_failed = true;
 		}
 
-		i += element_info.repeat - 1; //skip equal elements
+		i += element_repeat - 1; // Skip only the suffix submitted by this pass.
 	}
 
 	// Make the actual redraw request
@@ -1966,6 +1971,15 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	RendererCompositorStorage *compositor_storage = RendererCompositorStorage::get_singleton();
 	uint64_t gpu_occlusion_compositor_revision = 0;
 	uint32_t gpu_occlusion_early_count = 0;
+	GpuOcclusionRepeat::Statistics gpu_occlusion_repeat_statistics;
+	auto record_gpu_occlusion_batching = [&]() {
+		// These describe planned repeat groups, not successful GPU submissions.
+		// RenderInfo keeps its stock per-list accounting from _fill_instance_data.
+		gpu_occlusion->outcome["auto_instancing_disabled"] = false;
+		gpu_occlusion->outcome["original_opaque_repeat_group_count"] = int64_t(gpu_occlusion_repeat_statistics.original_draw_count);
+		gpu_occlusion->outcome["early_depth_repeat_group_count"] = int64_t(gpu_occlusion_repeat_statistics.early_depth_draw_count);
+		gpu_occlusion->outcome["remaining_depth_repeat_group_count"] = int64_t(gpu_occlusion_repeat_statistics.remaining_depth_draw_count);
+	};
 	if (gpu_occlusion.is_valid()) {
 		// Viewport owns the actual epoch. Never let a previous render's candidate
 		// survive an unsupported configuration or an early native return.
@@ -2466,21 +2480,14 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			}
 			gpu_occlusion->outcome["early_surface_count"] = int64_t(gpu_occlusion_early_count);
 			if (gpu_occlusion_early_count <= 4096) {
-				// Keep the original array and uploaded InstanceData indices. This
-				// first implementation deliberately disables opaque auto-instancing
-				// only for an admitted split; mixed phase repeats cannot cross it.
-				for (uint32_t i = 0; i < opaque.elements.size(); i++) {
-					if (render_info && opaque.element_info[i].repeat == 1) {
-						render_info[RSE::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]--;
-					}
-					opaque.element_info[i].repeat = 1;
-					if (render_info) {
-						render_info[RSE::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
-					}
-				}
+				// Preserve the original opaque/color repeat suffixes and uploaded
+				// InstanceData indices. Only depth uses phase-aware contiguous runs.
+				gpu_occlusion_depth_repeats.resize(opaque.elements.size());
+				gpu_occlusion_repeat_statistics = GpuOcclusionRepeat::build_phase_repeats(
+						opaque.element_info.ptr(), gpu_occlusion_early_surfaces.ptr(), opaque.elements.size(), gpu_occlusion_depth_repeats.ptr());
 				gpu_occlusion_split = true;
 				gpu_occlusion_compositor_revision = compositor_storage->get_gpu_occlusion_revision();
-				gpu_occlusion->outcome["auto_instancing_disabled"] = true;
+				record_gpu_occlusion_batching();
 			} else {
 				gpu_occlusion->set_outcome("occluder_capacity_exceeded");
 				gpu_occlusion->outcome["early_surface_count"] = int64_t(gpu_occlusion_early_count);
@@ -2515,6 +2522,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		if (gpu_occlusion_split) {
 			bool submission_failed = false;
 			render_list_params.gpu_occlusion_early_surfaces = &gpu_occlusion_early_surfaces;
+			render_list_params.gpu_occlusion_depth_repeats = &gpu_occlusion_depth_repeats;
 			render_list_params.gpu_occlusion_draw_early = true;
 			render_list_params.gpu_occlusion_submission_failed = &submission_failed;
 			_render_list_with_draw_list(&render_list_params, depth_framebuffer, RD::DRAW_CLEAR_ALL, Vector<Color>(), 0.0f, 0u, p_render_data->render_region);
@@ -2583,7 +2591,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			gpu_occlusion->set_outcome(selected ? "producer_acknowledged" : "producer_ack_rejected", selected);
 			gpu_occlusion->outcome["early_surface_count"] = int64_t(gpu_occlusion_early_count);
 			gpu_occlusion->outcome["remaining_surface_count"] = int64_t(render_list[RENDER_LIST_OPAQUE].elements.size() - gpu_occlusion_early_count);
-			gpu_occlusion->outcome["auto_instancing_disabled"] = true;
+			record_gpu_occlusion_batching();
 			if (selected) {
 				for (const GpuOcclusionConsumer &consumer : gpu_occlusion->consumers) {
 					GpuOcclusionDrawSelection selection;
