@@ -1,0 +1,14 @@
+#version 450
+layout(local_size_x=8,local_size_y=8) in;
+layout(set=0,binding=0) uniform sampler2D native_velocity;
+layout(set=0,binding=1) uniform sampler2D native_depth;
+layout(set=0,binding=2) uniform sampler2D native_color;
+layout(set=0,binding=3,std430) buffer Ledger{uint words[];} ledger;
+layout(push_constant,std430) uniform Params{uint row;uint serial;uint width;uint height;} pc;
+void main(){uvec2 p=gl_GlobalInvocationID.xy;if(p.x>=128u||p.y>=64u)return;
+uint base=pc.row*32784u,linear=p.y*128u+p.x,at=base+16u+linear*4u;
+vec2 v=texelFetch(native_velocity,ivec2(p),0).xy;
+ledger.words[at]=floatBitsToUint(v.x);ledger.words[at+1u]=floatBitsToUint(v.y);
+ledger.words[at+2u]=floatBitsToUint(texelFetch(native_depth,ivec2(p),0).r);
+ledger.words[at+3u]=floatBitsToUint(texelFetch(native_color,ivec2(p),0).r);
+if(linear==0u){ledger.words[base]=pc.serial;ledger.words[base+1u]=pc.width;ledger.words[base+2u]=pc.height;}}

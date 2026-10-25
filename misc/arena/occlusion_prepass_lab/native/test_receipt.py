@@ -31,7 +31,7 @@ def synthetic():
         callback = None
         outcome = dict(present=index > 0, epoch=index + 1, configuration_generation=1, selected=probe['selected'],
                        mode='CANDIDATE_SELECTED' if probe['selected'] else 'FALLBACK_SELECTED', reason='synthetic',
-                       early_surfaces=2 if probe['wall'] else 0, auto_instancing_disabled=probe['enabled'])
+                       early_surfaces=2 if probe['wall'] else 0, auto_instancing_disabled=False)
         if probe['enabled']:
             epoch, generation = index + 1, 1 if index < 9 else 2
             outcome['configuration_generation'] = generation
@@ -102,6 +102,9 @@ class NativeReceiptTests(unittest.TestCase):
 
     def test_drop_render(self):
         self.rejected(lambda raw: raw['probes'].pop())
+
+    def test_forced_single_instance_outcome(self):
+        self.rejected(lambda raw: raw['probes'][1]['outcome'].update(auto_instancing_disabled=True))
 
     def test_boolean_counter_is_not_integer(self):
         self.rejected(lambda raw: raw.update(ownership_probes=True))

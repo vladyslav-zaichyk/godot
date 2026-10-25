@@ -8,7 +8,8 @@
 		The caller owns the [RenderingDevice] RID. This resource never frees it and does not pin its lifetime. Remove the resource from every material, wait for queued rendering to finish, then free the buffer on the rendering thread. Destroying this resource leaves the caller's buffer alive. Missing or freed bindings use one zero record, so their length is 1. This safety fallback is not permission to free a buffer while a draw is using it.
 		Attachment is immutable: attaching the same live RID again succeeds; replacing it requires a new [BufferRD] resource. Assign non-null buffer parameters using [method ShaderMaterial.set_shader_parameter] on the rendering thread, after attachment. Invalid replacements leave the previous parameter unchanged. Serialize mutations of the same material; do not change it concurrently from another thread. Shader parameters accept an attached [BufferRD] or [code]null[/code] to clear the binding, not a bare RID or a texture. GPU RIDs are runtime-only and are not serialized.
 	</description>
-	<tutorials />
+	<tutorials>
+	</tutorials>
 	<methods>
 		<method name="attach_storage_buffer">
 			<return type="int" enum="Error" />
