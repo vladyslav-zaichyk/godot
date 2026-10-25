@@ -168,3 +168,36 @@ Compiler/CPU/managed checks and real Vulkan/lifetime checks have separate status
 This API does not attach arbitrary external buffers, implement a shared animation
 cache, or establish an FPS or physical-VRAM improvement. Existing E5 packages are
 immutable controls; local GPU runs wait for the renderer agent's test window.
+
+## E13c native TAA with GPU occlusion
+
+E13c extends the current-frame E13 prepass to native TAA when every registered
+candidate and complete fallback uses E8 shader-driven motion history and a
+compatible effective material. It preserves the existing selected occluder
+depth -> synchronous producer -> remaining depth LOAD -> opaque color/velocity
+order. Native TAA uses that same opaque pass; no extra motion pass or engine
+history bank is introduced.
+
+`viewport_configure_gpu_occlusion_prepass` has an optional fourth borrowed RID,
+`diagnostic_post_opaque_effect`. A nonempty RID identifies exactly one enabled
+POST_OPAQUE effect with a valid callback and all five needs/resolved flags false.
+It is a trusted numerical observer, not a general compositor opt-in or sandbox.
+Keep its effect/compositor alive; producer and observer have distinct list
+ownership. Empty RID retains the existing no-compositor policy. Use the exact
+matching new SDK; three-argument source compatibility does not imply old binary
+binding compatibility.
+
+First scope remains Windows x64 Vulkan Forward+, one history viewport/view,
+native scaling, clear/color background, no MSAA/upscaling/forced motion or other
+motion-demanding views. All previous material/alias/lifetime restrictions apply.
+CPU recording outcome flags do not certify GPU completion or commit caller
+history. A clean completed fallback render commits E8 history even if candidate
+acknowledgment failed; a skipped/rejected recording does not.
+
+See `misc/arena/occlusion_prepass_lab/taa/CONTRACT.md`, its fixed numerical plan,
+and the procedural E8 tilted-quad consumer. Bundles ship this as
+`occlusion_taa_lab/`, alongside the corrected standalone `gpu_history_lab/` and
+the existing TAA-off `occlusion_prepass_lab/`. New-binary E13b/E8 regressions and
+the combined GPU gate remain mandatory. Real VAT integration, eight LOD owners,
+resolved TAA image quality, sustained native lifetime, physical VRAM and FPS have
+separate acceptance; source/compile receipts alone do not qualify them.
