@@ -4,6 +4,22 @@ This is an experimental Godot-only fork for GPU rendering APIs. Game source,
 licensed assets and renderer performance fixtures are maintained separately.
 Godot's existing license, copyright and third-party notices continue to apply.
 
+## Frozen development baseline: 2026-10-25
+
+Engine R&D is paused at native `26f1b2b845817c7dfd3e7861cd04386a5f198df3`.
+The fork branch `arena/4.7.2-baseline` and immutable consumer tag
+`arena-4.7.2-baseline-2026-10-25` preserve the cumulative patch series plus
+documentation and a read-only bundle verifier. Their snapshot commit differs
+from the native binary commit; no native rebuild accompanies this freeze.
+
+Use the [frozen Windows .NET release](https://github.com/vladyslav-zaichyk/godot/releases/tag/arena-4.7.2-baseline-2026-10-25)
+and [baseline quickstart and qualification record](misc/arena/BASELINE_2026-10-25.md).
+The exact SDK is `4.7.2-arena-dev-g26f1b2b.845`. Eight bounded integration
+stages passed on this editor; production admission, physical VRAM and FPS gains
+remain unqualified. Existing game SDK/defaults and feature branches are unchanged.
+Resume engine work for a measured game bottleneck or a reproducible correctness
+failure; unfinished qualification does not block game development.
+
 ## Branch and version contract
 
 - `upstream`: `https://github.com/godotengine/godot.git`, fetch only.
@@ -63,10 +79,12 @@ as versioned Release assets; CI artifacts are temporary candidates. Verify a
 bundle's SHA-256 manifest before use. Other OS/architecture/backend combinations
 need separate builds and qualification.
 
-Run `python verify_bundle.py .` inside an extracted bundle before use. To assemble
-one from hosted CI artifacts, use `tools/arena/package_windows.py` with the editor
-artifact, native receipt artifact, committed fixture, full native SHA, successful
-GPU evidence directory and a fresh output path. `--help` lists the arguments.
+For the frozen baseline, download the release's standalone
+`verify_frozen_baseline.py` and run it against the extracted bundle directory.
+The original ZIP does not contain a verifier; its included guide is historical.
+The source version is `tools/arena/verify_frozen_baseline.py`. The older
+`tools/arena/package_windows.py` packages the initial BufferRD v1 contract only;
+do not use it to recreate or requalify this cumulative baseline.
 Native and consumer source SHAs are recorded separately: later fixture fixes
 must not relabel an already-built native executable.
 
@@ -123,17 +141,18 @@ changing the material cache or native binding. Serialize mutations of a material
 Detach all consumers and wait for their rendering work before freeing
 the caller-owned RID. The wrapper never frees that RID. Attachments require the
 render thread and a global-RD storage allocation of at least 16 bytes, divisible
-by 16. This contract is development scope, not a claim that v1 is already built
-or verified; consume only a matching tagged build and its API/GPU receipts.
+by 16. This contract remains development scope; consume only a matching tagged
+build and its API/GPU receipts.
 
 The initial candidate passed four compiler cases and a procedural RX 6800
 Vulkan/Forward+ contract: 40 lifecycle cycles, 562 numeric viewport audits,
 eight rejected attachments, four rejected material assignments, and stable
 logical RD bytes/native objects after collection and drainage. See the bundle
 receipts for exact native/consumer SHAs. This does not qualify physical VRAM,
-renderer FPS, other GPUs or gameplay. Runtime-array length currently makes
-Godot's optional re-spirv CPU optimizer fall back to the original SPIR-V;
-Vulkan execution passed, while its performance effect remains unmeasured.
+renderer FPS, other GPUs or gameplay. The initial candidate's runtime-array
+length made the optional re-spirv CPU optimizer fall back to original SPIR-V.
+Commit `4c138f2` added optimizer support and is included in the frozen baseline;
+the fallback description applies only to that historical candidate.
 
 References: [Godot .NET builds](https://docs.godotengine.org/en/stable/engine_details/development/compiling/compiling_with_dotnet.html),
 [upstream buffer proposal](https://github.com/godotengine/godot-proposals/issues/6989),
@@ -252,6 +271,14 @@ shadows. Geometry, thresholds and GPU capacity remain frozen.
 Use the separate exact editor/SDK/receipt with `--gate combined-required`.
 Old native3365639 remains a reference-boundary fallback control. Compiler/CPU
 evidence cannot qualify native GPU rendering, VAT, eight LOD owners, resolved
-TAA quality, physical VRAM or FPS. Exact-new-binary combined and E13b/E8/E13c/
-E13d GPU gates wait for integration A/B release; existing editor bundles remain
-immutable controls. Cascades, positional and multiple shadow lights are excluded.
+TAA quality, physical VRAM or FPS. Integration `936c4eac` subsequently passed all
+eight basic stages on exact native `26f1b2b`: orthographic, perspective, E8,
+real-VAT CPU preflight, real-VAT temporal control, combined TAA/occlusion, E13d
+and E13e. E13d passed 24 records; E13e passed 30 measured views plus I000.
+This is bounded acceptance with one owner, 16 stable slots and one Orthogonal
+directional light; real VAT plus shadows is a separate, unqualified combination.
+Runtime negative/recovery and sustained lifetime gates remain deferred. The
+latest timing attempt retained 23 windows / 342,220 frames without a complete
+clean A/B cohort, so no FPS improvement is accepted. Existing editor bundles
+remain immutable controls. Cascades, positional and multiple shadow lights are
+excluded. See the frozen baseline record for fixture and integration caveats.
