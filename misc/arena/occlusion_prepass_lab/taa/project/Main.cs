@@ -233,7 +233,7 @@ public partial class Main : Node
         _rd.ComputeListSetPushConstant(list,Bytes(push),80);_rd.ComputeListDispatch(list,16,8,1);_rd.ComputeListEnd();_captures++;
     }catch(Exception error){_callbackFailure=error.ToString();}}
     static double[] Point(uint[] pose,int id,Vector3 v){int at=id*16;double x=v.X+(double)Float(pose[at+14])*(v.Y+.5),y=v.Y,z=v.Z;
-        double Dot(int r)=>Float(pose[at+r])*x+Float(pose[at+r+1])*y+Float(pose[at+r+2])*z+Float(pose[at+r+3]);return new[]{Dot(0),Dot(4),Dot(8),1.};}
+        double Dot(int r)=>Float(pose[at+r])*x+Float(pose[at+r+1])*y+Float(pose[at+r+2])*z+Float(pose[at+r+3]);return new[]{Dot(0),Dot(4),Dot(8),1.0};}
     static double Cross(double[] a,double[] b)=>a[0]*b[1]-a[1]*b[0];
     static double[] Sub(double[] a,double[] b)=>new[]{a[0]-b[0],a[1]-b[1]};
     static double Edge(double[] p,double[] a,double[] b){double[] ab=Sub(b,a);return Math.Abs(Cross(ab,Sub(p,a)))/Math.Sqrt(ab[0]*ab[0]+ab[1]*ab[1]);}
