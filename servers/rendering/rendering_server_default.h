@@ -822,7 +822,7 @@ public:
 	FUNC2(viewport_set_use_debanding, RID, bool)
 	FUNC2(viewport_set_force_motion_vectors, RID, bool)
 	FUNC2(viewport_set_use_occlusion_culling, RID, bool)
-	FUNC3R(Error, viewport_configure_gpu_occlusion_prepass, RID, uint32_t, const Callable &)
+	FUNC4R(Error, viewport_configure_gpu_occlusion_prepass, RID, uint32_t, const Callable &, RID)
 	FUNC7R(Error, viewport_register_gpu_occlusion_consumer, RID, RID, RID, int64_t, RID, int64_t, int64_t)
 	FUNC2R(Error, viewport_unregister_gpu_occlusion_consumer, RID, RID)
 	FUNC1R(Error, viewport_clear_gpu_occlusion_prepass, RID)

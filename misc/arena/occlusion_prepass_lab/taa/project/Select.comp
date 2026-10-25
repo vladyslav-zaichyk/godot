@@ -1,0 +1,34 @@
+#version 450
+layout(local_size_x=1,local_size_y=1) in;
+layout(set=0,binding=0,std430) readonly buffer Pyramid{uint words[];} pyramid;
+layout(set=0,binding=1,std430) readonly buffer Current{uvec4 words[];} pose;
+layout(set=0,binding=2,std430) readonly buffer State{uvec4 words[];} state;
+layout(set=0,binding=3,std430) readonly buffer Header{uint words[];} header;
+layout(set=0,binding=4,std430) buffer Ids{uint words[];} ids;
+layout(set=0,binding=5,std430) buffer Stats{uint words[];} stats;
+layout(push_constant,std430) uniform Params{mat4 world_to_clip;uvec4 controls;uvec4 generation;uvec4 extent;} pc;
+const uint offsets[8]=uint[8](4u,8196u,10244u,10756u,10884u,10916u,10924u,10926u);
+bool visible(uint id){
+uvec4 s=state.words[id];if(s.x!=1u||s.y!=1u||s.z!=id||s.w==0u)return false;
+uvec4 meta=pose.words[id*4u+3u];if(meta.x!=s.w||meta.w!=header.words[0])return true;
+vec4 r0=uintBitsToFloat(pose.words[id*4u]),r1=uintBitsToFloat(pose.words[id*4u+1u]),r2=uintBitsToFloat(pose.words[id*4u+2u]);
+float deform=uintBitsToFloat(meta.z);vec2 low=vec2(1e20),high=vec2(-1e20);float nearest=0.0;
+// Envelope corners cover every source/deformed vertex; depth uncertainty stays visible.
+for(uint corner=0u;corner<8u;corner++){
+float x=(corner&1u)!=0u?.65:-.65,y=(corner&2u)!=0u?.65:-.65,z=(corner&4u)!=0u?.22:-.22;
+vec4 v=vec4(x+deform*(y+0.5),y,z,1.0);vec4 q=pc.world_to_clip*vec4(dot(r0,v),dot(r1,v),dot(r2,v),1.0);
+if(any(isnan(q))||any(isinf(q))||q.w<=0.0)return true;vec3 n=q.xyz/q.w;
+if(n.z<0.0||n.z>1.0)return true;vec2 pixel=(n.xy*.5+.5)*vec2(pc.extent.xy);low=min(low,pixel);high=max(high,pixel);nearest=max(nearest,n.z);}
+ivec4 rect=ivec4(ivec2(floor(low))-ivec2(1),ivec2(ceil(high))+ivec2(1));
+if(rect.x<0||rect.y<0||rect.z>int(pc.extent.x)||rect.w>int(pc.extent.y)||rect.z<=rect.x||rect.w<=rect.y)return true;
+uint extent=uint(max(rect.z-rect.x,rect.w-rect.y)),level=0u,block=1u;while(block<extent&&level<7u){block*=2u;level++;}
+uvec2 lo=uvec2(rect.xy)/block,hi=uvec2(rect.zw-ivec2(1))/block;uint width=max(1u,128u>>level);float minimum=1.0;
+for(uint y=lo.y;y<=hi.y;y++)for(uint x=lo.x;x<=hi.x;x++)minimum=min(minimum,uintBitsToFloat(pyramid.words[offsets[level]+y*width+x]));
+return !(minimum>nearest+.00002);}
+void main(){uint total=0u,admitted[16];
+if(pc.controls.y==0u)for(uint j=0u;j<16u;j++){
+uint i=j;if(j==0u)i=header.words[4];else if(j==1u)i=header.words[5];else{uint k=0u;for(uint id=0u;id<16u;id++)if(id!=header.words[4]&&id!=header.words[5]){if(k==j-2u){i=id;break;}k++;}}
+if(visible(i))admitted[total++]=i;}
+bool overflow=total>pc.controls.x;uint written=overflow?0u:total;if(!overflow)for(uint j=0u;j<written;j++)ids.words[16u+j]=admitted[j];
+stats.words[4]=written;stats.words[5]=total;stats.words[6]=overflow?1u:0u;stats.words[7]=pc.controls.y;
+stats.words[8]=pc.controls.z;stats.words[9]=pc.controls.w;stats.words[10]=pc.generation.x;stats.words[11]=pc.generation.y;}

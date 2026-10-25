@@ -32,6 +32,10 @@
 
 #include "core/object/class_db.h"
 
+bool GpuOcclusionMetadata::validate_motion_demand(bool p_using_taa, bool p_force_motion_vectors, int p_viewport_motion_count, int p_compositor_motion_count) {
+	return !p_force_motion_vectors && p_compositor_motion_count == 0 && p_viewport_motion_count == (p_using_taa ? 1 : 0);
+}
+
 Error GpuOcclusionMetadata::validate_camera(const Transform3D &p_camera, const Projection &p_projection, const Projection &p_corrected_projection, bool p_orthogonal) {
 	const real_t camera_determinant = p_camera.basis.determinant();
 	if (!p_camera.is_finite() || !Math::is_finite(camera_determinant) || camera_determinant == 0 || !p_camera.affine_inverse().is_finite()) {
@@ -134,6 +138,7 @@ bool GpuOcclusionPrepassState::begin_recording(RID p_viewport) {
 	}
 	viewport = p_viewport;
 	selected = false;
+	reset_recording_evidence();
 	if (epoch >= INT64_MAX) {
 		producer = Callable();
 		set_outcome("EPOCH_EXHAUSTED");
@@ -153,6 +158,34 @@ void GpuOcclusionPrepassState::set_outcome(const String &p_reason, bool p_select
 	outcome["selected"] = selected;
 	outcome["mode"] = selected ? "CANDIDATE_SELECTED" : "FALLBACK_SELECTED";
 	outcome["reason"] = p_reason;
+	outcome["opaque_recorded"] = opaque_recorded;
+	outcome["taa_process_recorded"] = taa_process_recorded;
+	outcome["taa_history_bootstrap"] = taa_history_bootstrap;
+	outcome["frame_recording_completed"] = frame_recording_completed;
+}
+
+void GpuOcclusionPrepassState::reset_recording_evidence() {
+	opaque_recorded = false;
+	taa_process_recorded = false;
+	taa_history_bootstrap = false;
+	frame_recording_completed = false;
+}
+
+void GpuOcclusionPrepassState::mark_opaque_recorded() {
+	opaque_recorded = true;
+	outcome["opaque_recorded"] = true;
+}
+
+void GpuOcclusionPrepassState::mark_taa_process_recorded(bool p_history_bootstrap) {
+	taa_process_recorded = true;
+	taa_history_bootstrap = p_history_bootstrap;
+	outcome["taa_process_recorded"] = true;
+	outcome["taa_history_bootstrap"] = p_history_bootstrap;
+}
+
+void GpuOcclusionPrepassState::mark_frame_recording_completed() {
+	frame_recording_completed = true;
+	outcome["frame_recording_completed"] = true;
 }
 
 void RenderGpuOcclusionContext::prepare(RID p_viewport, uint64_t p_epoch, uint64_t p_generation, int32_t p_view_index, const Size2i &p_size, const Projection &p_projection, const Transform3D &p_camera_transform, RID p_depth, int64_t p_compute_list) {

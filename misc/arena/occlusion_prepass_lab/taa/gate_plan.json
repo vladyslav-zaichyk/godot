@@ -1,6 +1,6 @@
 {
-  "contract": "arena-e13c-native-taa-e8-plan-v1",
-  "status": "specified_not_implemented_or_gpu_run",
+  "contract": "arena-e13c-native-taa-e8-plan-v2",
+  "status": "native_and_fixture_built_GPU_pending",
   "created_date": "2026-10-25",
   "audit_source_commit": "a5e1a2135cd673f00508c6b5b745d34d83f67d81",
   "audit_git_blob_sha256": {
@@ -21,24 +21,21 @@
     "misc/arena/occlusion_prepass_lab/CONTRACT.md": "6ad26f44abdc8cc20a459cd020908d1c7e883b895dc47ffc8af2ac04f8e2a6ff"
   },
   "prerequisites": {
-    "e13b_perspective_acceptance": "pending_external_receipt",
+    "e13b_perspective_acceptance": "accepted_52e4d1f9",
     "new_exact_e13c_editor_sdk_required": true,
     "inherited_new_binary_suites": [
       "E13b14orthographic+50perspective",
       "adapted_E8_95_preparations"
     ],
     "e13b_current_native": "3c3646629656d76133bf494edd937f2181a7e98b",
-    "e13b_current_exact_sdk": "4.7.2-arena-dev-g3c.36466296"
+    "e13b_current_exact_sdk": "4.7.2-arena-dev-g3c.36466296",
+    "E13b_handoff": "D:/Projects/arena-render-e13b-validation-work/HANDOFF.md",
+    "E8_readiness_commit": "106d56fcb84f941576ce66b3a5290551c8ceef5e"
   },
   "implementation_required_before_gpu": [
-    "native_TAA_admission_and_E8_fallback_guards",
-    "explicit_matching_POST_OPAQUE_observer_RID_opt_in",
-    "frame_recording_outcome_metadata",
-    "matched_new_editor_SDK_and_compile_receipts",
-    "fixed_producer_and_capture_GLSL_stage_mapping",
-    "per_row_active_ids_pose_bits_triangles_pixel_sample_maps_and_visibility_reference",
-    "payload_shader_mesh_and_layout_hash_inventory",
-    "perspective_receipt_validator_and_rejection_checks"
+    "successful_separate_exact_editor_SDK_and_compile_receipts",
+    "integration_rerun_new_binary_E13b_and_corrected_E8",
+    "freeze_runtime_receipt_identities_then_explicit_GPU_slot"
   ],
   "native_admission_negative_cases_outside_GPU_matrix": [
     "dead_or_wrong_kind_observer_RID",
@@ -198,7 +195,9 @@
     },
     "ledger_total_bytes": 23168512,
     "per_frame_gpu_readbacks": 0,
-    "gpu_capture_not_a_frame_time_measurement": true
+    "gpu_capture_not_a_frame_time_measurement": true,
+    "bounded_descriptor_cache_first_use_materialization": true,
+    "stress_descriptor_allocations": 0
   },
   "input_work": {
     "pose_bytes_per_slot_per_bank": 64,
@@ -4245,12 +4244,29 @@
     }
   ],
   "qualification": {
-    "native_implementation_present": false,
-    "new_build_present": false,
-    "GPU_suite_implemented": false,
+    "native_implementation_present": true,
+    "new_build_present": true,
+    "GPU_suite_implemented": true,
     "GPU_run": false,
     "resolved_TAA_quality": false,
     "performance": false,
     "native_leaks_or_physical_VRAM": false
-  }
+  },
+  "initialization_records": [
+    {
+      "id": "I000",
+      "before_E13_registration": true,
+      "finite_complete_E8_fallback": true,
+      "actual_viewport_records": 1,
+      "native_E13_epoch": false,
+      "producer_invocations": 0,
+      "observer_captures": 0,
+      "GPU_readbacks": 0,
+      "retry_permitted": false
+    }
+  ],
+  "combined_actual_viewport_records": 128,
+  "native_implementation_commit": "51a2b912f4161aa289d5b1cced99deb41289f1e4",
+  "fixture_payload_status": "project/scenarios.json frozen;20 integrated CPU validator tests passed;GPU unexecuted",
+  "new_exact_sdk_version": "4.7.2-arena-dev-g51a2b912f.4"
 }

@@ -43,6 +43,7 @@
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/rendering_method.h"
 #include "servers/rendering/rendering_server_globals.h"
+#include "servers/rendering/storage/compositor_storage.h"
 #include "servers/rendering/storage/texture_storage.h"
 
 #ifndef _3D_DISABLED
@@ -1007,7 +1008,15 @@ void RendererViewport::draw_viewports(bool p_swap_buffers) {
 	}
 }
 
-Error RendererViewport::viewport_configure_gpu_occlusion_prepass(RID p_viewport, uint32_t p_occluder_layer_mask, const Callable &p_producer) {
+bool RendererViewport::viewport_gpu_occlusion_motion_is_supported(RID p_viewport, bool p_using_taa) const {
+	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	const RendererCompositorStorage *compositor_storage = RendererCompositorStorage::get_singleton();
+	return viewport && compositor_storage && viewport->use_taa == p_using_taa &&
+			GpuOcclusionMetadata::validate_motion_demand(p_using_taa, viewport->force_motion_vectors, num_viewports_with_motion_vectors,
+					compositor_storage->get_num_compositor_effects_with_motion_vectors());
+}
+
+Error RendererViewport::viewport_configure_gpu_occlusion_prepass(RID p_viewport, uint32_t p_occluder_layer_mask, const Callable &p_producer, RID p_diagnostic_post_opaque_effect) {
 	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
 	if (!viewport) {
 		return ERR_INVALID_PARAMETER;
@@ -1018,11 +1027,19 @@ Error RendererViewport::viewport_configure_gpu_occlusion_prepass(RID p_viewport,
 	if (!p_producer.is_valid()) {
 		return ERR_INVALID_PARAMETER;
 	}
+	RendererCompositorStorage *compositor_storage = RendererCompositorStorage::get_singleton();
+	if (p_diagnostic_post_opaque_effect.is_valid() && (!compositor_storage || !compositor_storage->is_compositor_effect(p_diagnostic_post_opaque_effect))) {
+		return ERR_INVALID_PARAMETER;
+	}
+	if (p_diagnostic_post_opaque_effect.is_valid() && (!viewport->use_taa || !compositor_storage->gpu_occlusion_observer_effect_is_valid(p_diagnostic_post_opaque_effect))) {
+		return ERR_UNAVAILABLE;
+	}
 #if defined(WINDOWS_ENABLED) && !defined(_3D_DISABLED)
 	RD *rd = RD::get_singleton();
 	if (sizeof(void *) != 8 || !rd || OS::get_singleton()->get_current_rendering_method() != "forward_plus" || OS::get_singleton()->get_current_rendering_driver_name() != "vulkan" ||
 			!RendererSceneRenderImplementation::RenderForwardClustered::get_singleton() || !rd->get_device_driver()->supports_indirect_first_instance() ||
-			viewport->view_count != 1 || viewport->use_xr || viewport->msaa_3d != RSE::VIEWPORT_MSAA_DISABLED || viewport->use_taa || viewport->force_motion_vectors ||
+			viewport->view_count != 1 || viewport->use_xr || viewport->msaa_3d != RSE::VIEWPORT_MSAA_DISABLED || viewport->force_motion_vectors ||
+			(viewport->use_taa && !viewport_gpu_occlusion_motion_is_supported(p_viewport, true)) ||
 			viewport->scaling_3d_scale != 1.0f || (viewport->scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_OFF && viewport->scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_BILINEAR && viewport->scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_NEAREST) || viewport->debug_draw != RSE::VIEWPORT_DEBUG_DRAW_DISABLED) {
 		return ERR_UNAVAILABLE;
 	}
@@ -1039,10 +1056,26 @@ Error RendererViewport::viewport_configure_gpu_occlusion_prepass(RID p_viewport,
 	if (state->configuration_generation >= INT64_MAX) {
 		return ERR_UNAVAILABLE;
 	}
+#if defined(WINDOWS_ENABLED) && !defined(_3D_DISABLED)
+	// Enabling temporal admission must not silently promote an E5 fallback.
+	// Check all preserved registrations before replacing configuration metadata.
+	if (viewport->use_taa) {
+		RendererRD::MaterialStorage::get_singleton()->_update_queued_materials();
+		for (const GpuOcclusionConsumer &consumer : state->consumers) {
+			RenderGeometryInstance *instance = static_cast<RendererSceneCull *>(RSG::scene)->instance_get_render_geometry_instance(consumer.instance, viewport->scenario);
+			const Error error = RendererSceneRenderImplementation::RenderForwardClustered::get_singleton()->gpu_occlusion_validate_consumer(instance, consumer);
+			if (error != OK) {
+				return error;
+			}
+		}
+	}
+#endif
 	state->configuration_generation++;
 	state->viewport = p_viewport;
 	state->layer_mask = p_occluder_layer_mask;
 	state->producer = p_producer;
+	state->diagnostic_post_opaque_effect = p_diagnostic_post_opaque_effect;
+	state->reset_recording_evidence();
 	state->set_outcome("CONFIGURED");
 	viewport->gpu_occlusion_prepass_state = state;
 	gpu_occlusion_viewport = p_viewport;
@@ -1130,6 +1163,7 @@ Error RendererViewport::viewport_register_gpu_occlusion_consumer(RID p_viewport,
 		state->consumers.push_back(candidate);
 	}
 	state->configuration_generation++;
+	state->reset_recording_evidence();
 	state->set_outcome("REGISTERED");
 	return OK;
 #else
@@ -1156,6 +1190,7 @@ Error RendererViewport::viewport_unregister_gpu_occlusion_consumer(RID p_viewpor
 			}
 			state->consumers.remove_at(i);
 			state->configuration_generation++;
+			state->reset_recording_evidence();
 			state->set_outcome("UNREGISTERED");
 			return OK;
 		}
@@ -1178,8 +1213,10 @@ Error RendererViewport::viewport_clear_gpu_occlusion_prepass(RID p_viewport) {
 		}
 		state->configuration_generation++;
 		state->producer = Callable();
+		state->diagnostic_post_opaque_effect = RID();
 		state->consumers.clear();
 		state->layer_mask = 0;
+		state->reset_recording_evidence();
 		state->set_outcome("CLEARED");
 	}
 	if (gpu_occlusion_viewport == p_viewport) {

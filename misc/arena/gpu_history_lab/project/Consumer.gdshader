@@ -17,7 +17,7 @@ void vertex() {
         buffer_length(visible_ids) == 2u && buffer_length(lifecycle) == h.z &&
         buffer_length(current_pose) == h.z * 4u && buffer_length(previous_pose) == h.z * 4u;
     uint id = 0xffffffffu;
-    if (valid) { id = buffer_load(visible_ids, slot >> 2u)[int(slot & 3u)]; valid = id < h.z; }
+    if (valid) { uvec4 packed_id = buffer_load(visible_ids, slot >> 2u); uint lane = slot & 3u; id = lane == 0u ? packed_id.x : lane == 1u ? packed_id.y : lane == 2u ? packed_id.z : packed_id.w; valid = id < h.z; }
     if (valid) {
         uint base = id * 4u;
         uvec4 c = buffer_load(current_pose, base + 3u);
