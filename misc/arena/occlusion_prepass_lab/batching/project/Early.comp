@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x=8,local_size_y=8) in;
+layout(set=0,binding=0) uniform sampler2D native_depth;
+layout(set=0,binding=1,std430) buffer Ledger{uint words[];} ledger;
+layout(push_constant,std430) uniform Params{uint row;uint serial;uint epoch_lo;uint epoch_hi;uint generation_lo;uint generation_hi;uint width;uint height;} pc;
+void main(){uvec2 p=gl_GlobalInvocationID.xy;if(p.x>=128u||p.y>=64u)return;
+uint base=pc.row*8208u,at=p.y*128u+p.x;
+ledger.words[base+16u+at]=floatBitsToUint(texelFetch(native_depth,ivec2(p),0).r);
+if(at==0u){ledger.words[base]=pc.serial;ledger.words[base+1u]=pc.epoch_lo;ledger.words[base+2u]=pc.epoch_hi;
+ledger.words[base+3u]=pc.generation_lo;ledger.words[base+4u]=pc.generation_hi;ledger.words[base+5u]=pc.width;ledger.words[base+6u]=pc.height;}}

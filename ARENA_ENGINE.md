@@ -201,3 +201,25 @@ the existing TAA-off `occlusion_prepass_lab/`. New-binary E13b/E8 regressions an
 the combined GPU gate remain mandatory. Real VAT integration, eight LOD owners,
 resolved TAA image quality, sustained native lifetime, physical VRAM and FPS have
 separate acceptance; source/compile receipts alone do not qualify them.
+
+## E13d ordinary opaque instancing
+
+E13d preserves the stock ordinary opaque/color repeat groups when E13 splits
+depth. Only early and remaining depth use a separate phase-aware suffix table;
+sorted elements, native InstanceData indices and color metadata stay unchanged.
+The reused CPU table requests four bytes per active opaque surface plus capacity
+slack. No public method, Hi-Z algorithm, shadow or temporal admission is added.
+Outcome repeat-group counts describe planned groups, not physical GPU calls.
+
+See `misc/arena/occlusion_prepass_lab/BATCHING_CONTRACT.md` and the bounded
+ordinary-mesh stand in `misc/arena/occlusion_prepass_lab/batching`. The stand
+captures early depth and pre-TAA identity/depth/velocity for six shared-mesh
+owners across 24 records; it does not qualify E8 or crowd histories. New-binary
+E13b/E8/E13c integration regressions remain required. The older native oracle
+now expects `auto_instancing_disabled=false`; consume each oracle with its
+matching candidate, rather than relabeling old evidence.
+
+The same separate editor carries BufferRD's explicit tutorial-tag correction.
+There is no documentation-only build. Clean editor resource import and GPU
+execution have separate gates; the XML correction does not claim to fix the
+independently observed CLI documentation-dump singleton/access violation.

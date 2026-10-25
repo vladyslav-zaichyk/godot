@@ -190,7 +190,7 @@ def validate(raw, oracle, expected):
             require(outcome['present'] is True and outcome['epoch'] == previous_epoch and outcome['configuration_generation'] == previous_generation
                     and outcome['mode'] == ('CANDIDATE_SELECTED' if probe['selected'] else 'FALLBACK_SELECTED')
                     and type(outcome['reason']) is str and outcome['reason'] and type(outcome['early_surfaces']) is int
-                    and outcome['early_surfaces'] == (2 if probe['wall'] else 0) and outcome['auto_instancing_disabled'] is True, 'Native phase/outcome differs.')
+                    and outcome['early_surfaces'] == (2 if probe['wall'] else 0) and outcome['auto_instancing_disabled'] is False, 'Native phase/outcome differs from E13d batching.')
             matrix_words = callback.get('world_to_clip_words'); words(matrix_words, 16, 'corrected projection')
             matrix = struct.unpack('<16f', struct.pack('<16I', *matrix_words))
             require(all(math.isfinite(v) for v in matrix), 'Nonfinite native projection.')
