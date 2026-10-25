@@ -1,5 +1,5 @@
 {
-  "contract": "arena-e13c-native-taa-e8-plan-v1",
+  "contract": "arena-e13c-native-taa-e8-plan-v2",
   "status": "specified_not_implemented_or_gpu_run",
   "created_date": "2026-10-25",
   "audit_source_commit": "a5e1a2135cd673f00508c6b5b745d34d83f67d81",
@@ -21,14 +21,16 @@
     "misc/arena/occlusion_prepass_lab/CONTRACT.md": "6ad26f44abdc8cc20a459cd020908d1c7e883b895dc47ffc8af2ac04f8e2a6ff"
   },
   "prerequisites": {
-    "e13b_perspective_acceptance": "pending_external_receipt",
+    "e13b_perspective_acceptance": "accepted_52e4d1f9",
     "new_exact_e13c_editor_sdk_required": true,
     "inherited_new_binary_suites": [
       "E13b14orthographic+50perspective",
       "adapted_E8_95_preparations"
     ],
     "e13b_current_native": "3c3646629656d76133bf494edd937f2181a7e98b",
-    "e13b_current_exact_sdk": "4.7.2-arena-dev-g3c.36466296"
+    "e13b_current_exact_sdk": "4.7.2-arena-dev-g3c.36466296",
+    "E13b_handoff": "D:/Projects/arena-render-e13b-validation-work/HANDOFF.md",
+    "E8_readiness_commit": "106d56fcb84f941576ce66b3a5290551c8ceef5e"
   },
   "implementation_required_before_gpu": [
     "native_TAA_admission_and_E8_fallback_guards",
@@ -4252,5 +4254,19 @@
     "resolved_TAA_quality": false,
     "performance": false,
     "native_leaks_or_physical_VRAM": false
-  }
+  },
+  "initialization_records": [
+    {
+      "id": "I000",
+      "before_E13_registration": true,
+      "finite_complete_E8_fallback": true,
+      "actual_viewport_records": 1,
+      "native_E13_epoch": false,
+      "producer_invocations": 0,
+      "observer_captures": 0,
+      "GPU_readbacks": 0,
+      "retry_permitted": false
+    }
+  ],
+  "combined_actual_viewport_records": 128
 }

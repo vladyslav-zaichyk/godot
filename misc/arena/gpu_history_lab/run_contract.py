@@ -25,7 +25,7 @@ INPUTS = ('GpuHistoryLab.csproj', 'project.godot', 'Main.tscn', 'GpuHistoryContr
           'Producer.glslinc', 'Capture.glslinc')
 PACKAGES = ('Godot.NET.Sdk', 'GodotSharp', 'GodotSharpEditor', 'Godot.SourceGenerators')
 DIAGNOSTIC = re.compile(r'\b(?:ERROR:|SCRIPT ERROR:|WARNING:|FATAL(?: ERROR)?[: ]|Unhandled exception)|'
-                        r'ObjectDB instances leaked|Orphan StringName|RID allocations', re.I)
+                        r'ObjectDB instances leaked|Orphan StringName|RID allocations|Op[A-Za-z0-9_]+ is not supported yet', re.I)
 
 
 def sha(path):

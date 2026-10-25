@@ -7,8 +7,14 @@ The existing E13b editor remains native
 `3c3646629656d76133bf494edd937f2181a7e98b`, exact generated SDK
 `4.7.2-arena-dev-g3c.36466296`. It still rejects E13 with TAA.
 
-Implementation/build work follows the integration owner's acceptance of the
-E13b perspective/bounds gate. The eventual E13c editor needs fresh exact-build
+The integration owner's E13b acceptance is recorded in commit52e4d1f9 and
+`D:/Projects/arena-render-e13b-validation-work/HANDOFF.md`:14 orthographic
+controls and P01-P08 (25 states/50 records), including2,314,469 transformed VAT
+vertices, passed on native3c36466. Scope: one owner,16 slots, no TAA.
+The following corrected E8 readiness gate is commit106d56fc and
+`D:/Projects/arena-render-e13-history-validation-work/HANDOFF.md`:95 prepared,
+94 captures,724 velocity probes. This satisfies the implementation prerequisite.
+The eventual E13c editor still needs fresh exact-build
 E13b regressions, an adapted existing E8 gate, and this combined gate. Existing
 source, receipt or orthographic success cannot qualify the combination.
 
@@ -212,7 +218,14 @@ cannot silently enter this small-motion oracle. Do not widen thresholds later.
 
 ## Fixed matrix, work and storage
 
-`gate_plan.json` lists every scheduling record. Eight groups total128:
+`gate_plan.json` v2 adds one declared initialization render I000 before native
+registration: finite E8 complete fallback, no observer/readback/retry. The
+integration gate needed this actual frame to publish scene-cull bounds. It is
+outside the128-row matrix and its native E13 epochs; it is not a hidden warmup.
+Expected combined actual view records:128 =1 initialization +127 matrix records.
+All matrix work/capture/ledger counts below exclude I000.
+
+`gate_plan.json` lists every matrix scheduling record. Eight groups total128:
 12 calibration,8 selection,6 hidden/reentry,10 lifecycle,8 cadence,
 12 perspective/jitter,8 temporal reset/guards,64 fixed-bank stress.
 T042 skips the viewport. T060/T062 reject invalid fallback before the producer;
@@ -232,7 +245,7 @@ copy +7reductions +selection +finalizer:10 dispatches,9 barriers; totals1240/111
 Observer records one bounded raw-grid dispatch per capture:124 more. Freeze the
 later GLSL stage mapping before executing this numerical plan.
 Resource preparation may flush CPU queues while the viewport is disabled; no
-unlisted actual viewport warmups are permitted. If an implementation needs them,
+unlisted actual viewport warmups are permitted. If an implementation needs more,
 version the matrix and counts before execution rather than hide rendered frames.
 
 Per-record ledger strides: raw grid131072 bytes (fixed128x64x16), UBO5696,

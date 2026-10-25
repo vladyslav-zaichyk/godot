@@ -245,6 +245,7 @@ public partial class GpuHistoryContract : Node
             var p=new Publication(_next+1,_next,_forceReseed?_next+1:_committedEpoch,state,_committed,_forceReseed);
             _publications.Add(p);_pending=p;_next++;
             _camera!.Position=new Vector3(state.CameraX,state.CameraY,2);
+            _camera.ForceUpdateTransform();
             _view!.UseTaa=state.Taa;_view.Scaling3DMode=(Viewport.Scaling3DModeEnum)state.Scaling;_view.Scaling3DScale=1;
             _view.RenderTargetUpdateMode=state.Skip?SubViewport.UpdateMode.Disabled:SubViewport.UpdateMode.Always;
             RenderingServer.CallOnRenderThread(Callable.From(()=>{try{Produce(p);}catch(Exception error){Fail(error);} }));
@@ -415,12 +416,12 @@ public partial class GpuHistoryContract : Node
                     Check(Mathf.Abs(actual.X-expected.X)<=Tolerance&&Mathf.Abs(actual.Y-expected.Y)<=Tolerance,$"Velocity {p.State.Name} ID{id} at {sample.X},{sample.Y}: {actual}!={expected}.");
                     bool designatedX=p.State.Name is "root_positive" or "multiple_ticks_root_negative" or
                         "deformation_positive_no_time" or "deformation_negative_no_time" or "camera_only";
-                    if(designatedX)Check(Mathf.Abs(expected.X)>=1f/256&&Mathf.Abs(expected.X)<=1f/8,"Designated X oracle outside preregistered nonzero range.");
+                    if(designatedX)Check(Mathf.Abs(expected.X)>=1f/256&&Mathf.Abs(expected.X)<=1f/8,$"Designated X oracle outside preregistered nonzero range: {p.State.Name} ID{id} expected={expected} actual={actual} current={current[0]} previous={prev[0]} jitter={cj}/{pj}.");
                     if(p.State.Name=="camera_only")Check(Mathf.Abs(expected.Y)>=1f/256&&Mathf.Abs(expected.Y)<=1f/8,"Designated Y oracle outside preregistered nonzero range.");
                     if(expected.Length()>1f/256){Check(actual.Length()>1f/512,"Nonzero oracle accepted zero output.");nonzero++;}
                     _pixels.Add(new{epoch=p.Epoch,name=p.State.Name,id,x=sample.X,y=sample.Y,triangle=sample.Triangle,
                         barycentric=weights,previous_valid=history,expected_uv=new[]{expected.X,expected.Y},actual_uv=new[]{actual.X,actual.Y},
-                        expected_depth=expectedDepth,actual_depth=depth,designated_nonzero_x=designatedX,tolerance_uv=Tolerance});
+                        expected_depth=expectedDepth,actual_depth=depth,designated_nonzero_x=designatedX,tolerance_uv=(double)Tolerance});
                 }
                 Vector3 cp=p.State.Pose(id),pp=previous.Pose(id);
                 identities.Add(new{id,previous_valid=history,current_pose=new[]{cp.X,cp.Y,cp.Z},previous_pose=new[]{pp.X,pp.Y,pp.Z},
