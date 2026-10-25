@@ -61,6 +61,7 @@ namespace GpuOcclusionMetadata {
 
 // Internal admission only; caller storage and animated bounds are not inspected.
 Error validate_camera(const Transform3D &p_camera, const Projection &p_projection, const Projection &p_corrected_projection, bool p_orthogonal);
+bool validate_motion_demand(bool p_using_taa, bool p_force_motion_vectors, int p_viewport_motion_count, int p_compositor_motion_count);
 Error validate_consumer_numbers(int64_t p_candidate_base, int64_t p_capacity, int64_t p_draw_capacity, int64_t p_command_offset);
 bool intervals_overlap(uint64_t p_begin_a, uint64_t p_size_a, uint64_t p_begin_b, uint64_t p_size_b);
 bool consumers_conflict(const GpuOcclusionConsumer &p_a, const GpuOcclusionConsumer &p_b);
@@ -75,14 +76,24 @@ public:
 	RID viewport;
 	uint32_t layer_mask = 0;
 	Callable producer;
+	// Borrowed diagnostic identity; caller retains the effect and compositor.
+	RID diagnostic_post_opaque_effect;
 	uint64_t epoch = 0;
 	uint64_t configuration_generation = 0;
 	Vector<GpuOcclusionConsumer> consumers;
 	bool recording = false;
 	bool selected = false;
+	bool opaque_recorded = false;
+	bool taa_process_recorded = false;
+	bool taa_history_bootstrap = false;
+	bool frame_recording_completed = false;
 	Dictionary outcome;
 
 	bool begin_recording(RID p_viewport);
+	void reset_recording_evidence();
+	void mark_opaque_recorded();
+	void mark_taa_process_recorded(bool p_history_bootstrap);
+	void mark_frame_recording_completed();
 	void set_outcome(const String &p_reason, bool p_selected = false);
 	static bool validate_ack(const Variant &p_acknowledgment, uint64_t p_epoch, uint64_t p_configuration_generation) {
 		return GpuOcclusionMetadata::validate_acknowledgment(p_acknowledgment, p_epoch, p_configuration_generation);

@@ -34,8 +34,139 @@ TEST_FORCE_LINK(test_gpu_occlusion_prepass)
 
 #include "core/object/class_db.h"
 #include "servers/rendering/gpu_occlusion_prepass.h"
+#include "servers/rendering/storage/compositor_storage.h"
 
 namespace TestGpuOcclusionPrepass {
+
+TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Native TAA admits only its own motion demand") {
+	using GpuOcclusionMetadata::validate_motion_demand;
+	for (bool taa : { false, true }) {
+		for (bool forced : { false, true }) {
+			for (int viewports = -1; viewports <= 3; viewports++) {
+				for (int compositors = -1; compositors <= 2; compositors++) {
+					const bool expected = !forced && compositors == 0 && viewports == (taa ? 1 : 0);
+					CHECK(validate_motion_demand(taa, forced, viewports, compositors) == expected);
+				}
+			}
+		}
+	}
+}
+
+struct ObserverFixture {
+	RendererCompositorStorage *storage = RendererCompositorStorage::get_singleton();
+	Ref<RefCounted> target;
+	RID effect;
+	RID other;
+	RID compositor;
+
+	ObserverFixture() {
+		target.instantiate();
+		effect = storage->compositor_effect_allocate();
+		storage->compositor_effect_initialize(effect);
+		storage->compositor_effect_set_callback(effect, RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_OPAQUE, Callable(target.ptr(), "get_instance_id"));
+		other = storage->compositor_effect_allocate();
+		storage->compositor_effect_initialize(other);
+		storage->compositor_effect_set_callback(other, RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_PRE_OPAQUE, Callable(target.ptr(), "get_instance_id"));
+		compositor = storage->compositor_allocate();
+		storage->compositor_initialize(compositor);
+		storage->compositor_set_compositor_effects(compositor, { effect });
+	}
+
+	~ObserverFixture() {
+		if (storage->is_compositor(compositor)) {
+			storage->compositor_free(compositor);
+		}
+		if (storage->is_compositor_effect(other)) {
+			storage->compositor_effect_free(other);
+		}
+		if (storage->is_compositor_effect(effect)) {
+			storage->compositor_effect_free(effect);
+		}
+	}
+};
+
+TEST_CASE("[SceneTree][Rendering][IndirectDraw][GPUOcclusion] Observer requires one live exact occurrence across every stage") {
+	REQUIRE(RendererCompositorStorage::get_singleton() != nullptr);
+	ObserverFixture fixture;
+	auto *storage = fixture.storage;
+	CHECK(storage->gpu_occlusion_observer_is_valid(RID(), RID(), false));
+	CHECK(storage->gpu_occlusion_observer_is_valid(RID(), RID(), true));
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, RID(), true));
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(RID(), fixture.effect, true));
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, false));
+	CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, RID::from_uint64(UINT64_MAX), true));
+	for (int stage = 0; stage < RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_MAX; stage++) {
+		storage->compositor_effect_set_callback(fixture.other, RSE::CompositorEffectCallbackType(stage), Callable(fixture.target.ptr(), "get_instance_id"));
+		storage->compositor_set_compositor_effects(fixture.compositor, { fixture.effect, fixture.other });
+		CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	}
+	storage->compositor_effect_set_enabled(fixture.other, false);
+	CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	storage->compositor_set_compositor_effects(fixture.compositor, { fixture.effect, fixture.effect });
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	storage->compositor_set_compositor_effects(fixture.compositor, {});
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, RID(), true));
+	storage->compositor_set_compositor_effects(fixture.compositor, { fixture.effect });
+	storage->compositor_effect_set_enabled(fixture.effect, false);
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	storage->compositor_effect_set_enabled(fixture.effect, true);
+	storage->compositor_effect_free(fixture.effect);
+	CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+}
+
+TEST_CASE("[SceneTree][Rendering][IndirectDraw][GPUOcclusion] Observer rejects each demand flag and invalid callbacks quietly") {
+	REQUIRE(RendererCompositorStorage::get_singleton() != nullptr);
+	ObserverFixture fixture;
+	auto *storage = fixture.storage;
+	for (RSE::CompositorEffectFlags flag : { RSE::COMPOSITOR_EFFECT_FLAG_ACCESS_RESOLVED_COLOR, RSE::COMPOSITOR_EFFECT_FLAG_ACCESS_RESOLVED_DEPTH,
+			 RSE::COMPOSITOR_EFFECT_FLAG_NEEDS_MOTION_VECTORS, RSE::COMPOSITOR_EFFECT_FLAG_NEEDS_ROUGHNESS, RSE::COMPOSITOR_EFFECT_FLAG_NEEDS_SEPARATE_SPECULAR }) {
+		storage->compositor_effect_set_flag(fixture.effect, flag, true);
+		CHECK_FALSE(storage->gpu_occlusion_observer_effect_is_valid(fixture.effect));
+		CHECK_FALSE(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+		storage->compositor_effect_set_flag(fixture.effect, flag, false);
+		CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	}
+	for (int stage = 0; stage <= RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_MAX; stage++) {
+		storage->compositor_effect_set_callback(fixture.effect, RSE::CompositorEffectCallbackType(stage), Callable(fixture.target.ptr(), "get_instance_id"));
+		CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true) == (stage == RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_OPAQUE));
+	}
+	storage->compositor_effect_set_callback(fixture.effect, RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_OPAQUE, Callable());
+	CHECK_FALSE(storage->gpu_occlusion_observer_effect_is_valid(fixture.effect));
+	storage->compositor_effect_set_callback(fixture.effect, RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_OPAQUE, Callable(fixture.target.ptr(), "missing_observer_method"));
+	CHECK_FALSE(storage->gpu_occlusion_observer_effect_is_valid(fixture.effect));
+	storage->compositor_effect_set_callback(fixture.effect, RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_OPAQUE, Callable(fixture.target.ptr(), "get_instance_id"));
+	fixture.target.unref();
+	CHECK_FALSE(storage->gpu_occlusion_observer_effect_is_valid(fixture.effect));
+}
+
+TEST_CASE("[SceneTree][Rendering][IndirectDraw][GPUOcclusion] Observer graph mutation identity survives valid-looking replacements") {
+	REQUIRE(RendererCompositorStorage::get_singleton() != nullptr);
+	ObserverFixture fixture;
+	auto *storage = fixture.storage;
+	uint64_t revision = storage->get_gpu_occlusion_revision();
+	CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	CHECK(storage->get_gpu_occlusion_revision() == revision);
+	storage->compositor_effect_set_callback(fixture.effect, RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_OPAQUE, Callable(fixture.target.ptr(), "get_instance_id"));
+	CHECK(storage->get_gpu_occlusion_revision() > revision);
+	CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	revision = storage->get_gpu_occlusion_revision();
+	storage->compositor_set_compositor_effects(fixture.compositor, { fixture.effect, fixture.effect });
+	storage->compositor_set_compositor_effects(fixture.compositor, { fixture.effect });
+	CHECK(storage->get_gpu_occlusion_revision() > revision);
+	CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	revision = storage->get_gpu_occlusion_revision();
+	storage->compositor_effect_set_enabled(fixture.effect, false);
+	storage->compositor_effect_set_enabled(fixture.effect, true);
+	CHECK(storage->get_gpu_occlusion_revision() > revision);
+	CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+	revision = storage->get_gpu_occlusion_revision();
+	storage->compositor_effect_set_flag(fixture.effect, RSE::COMPOSITOR_EFFECT_FLAG_ACCESS_RESOLVED_DEPTH, true);
+	storage->compositor_effect_set_flag(fixture.effect, RSE::COMPOSITOR_EFFECT_FLAG_ACCESS_RESOLVED_DEPTH, false);
+	CHECK(storage->get_gpu_occlusion_revision() > revision);
+	CHECK(storage->gpu_occlusion_observer_is_valid(fixture.compositor, fixture.effect, true));
+}
 
 TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Camera admission supports perspective FOV and aspect changes without temporal features") {
 	using GpuOcclusionMetadata::validate_camera;
@@ -240,6 +371,53 @@ TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Every recording starts fallba
 	CHECK_FALSE(state->recording);
 }
 
+TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Recording evidence resets per epoch and survives selection reason changes") {
+	Ref<GpuOcclusionPrepassState> state;
+	state.instantiate();
+	state->configuration_generation = 5;
+	REQUIRE(state->begin_recording(RID::from_uint64(1)));
+	for (const char *key : { "opaque_recorded", "taa_process_recorded", "taa_history_bootstrap", "frame_recording_completed" }) {
+		CHECK(state->outcome[key].get_type() == Variant::BOOL);
+		CHECK_FALSE(bool(state->outcome[key]));
+	}
+	state->set_outcome("producer_ack_rejected");
+	state->mark_opaque_recorded();
+	state->mark_taa_process_recorded(true);
+	state->mark_frame_recording_completed();
+	CHECK_FALSE(state->selected); // A successfully rendered fallback still commits history.
+	CHECK(bool(state->outcome["opaque_recorded"]));
+	CHECK(bool(state->outcome["taa_process_recorded"]));
+	CHECK(bool(state->outcome["taa_history_bootstrap"]));
+	CHECK(bool(state->outcome["frame_recording_completed"]));
+	CHECK_FALSE(state->begin_recording(RID::from_uint64(2)));
+	CHECK(bool(state->outcome["frame_recording_completed"]));
+	state->recording = false;
+	REQUIRE(state->begin_recording(RID::from_uint64(1)));
+	for (const char *key : { "opaque_recorded", "taa_process_recorded", "taa_history_bootstrap", "frame_recording_completed" }) {
+		CHECK_FALSE(bool(state->outcome[key]));
+	}
+	state->set_outcome("producer_acknowledged", true);
+	state->mark_opaque_recorded();
+	state->set_outcome("observer_graph_mutation");
+	state->outcome["mode"] = "FRAME_REJECTED";
+	CHECK(bool(state->outcome["opaque_recorded"])); // Already recorded work is not undone by rejection.
+	CHECK_FALSE(bool(state->outcome["taa_process_recorded"]));
+	CHECK_FALSE(bool(state->outcome["taa_history_bootstrap"]));
+	CHECK_FALSE(bool(state->outcome["frame_recording_completed"]));
+	state->recording = false;
+	REQUIRE(state->begin_recording(RID::from_uint64(1)));
+	state->mark_opaque_recorded();
+	state->mark_taa_process_recorded(false);
+	CHECK(bool(state->outcome["taa_process_recorded"]));
+	CHECK_FALSE(bool(state->outcome["taa_history_bootstrap"]));
+	state->recording = false;
+	state->epoch = INT64_MAX;
+	CHECK_FALSE(state->begin_recording(RID::from_uint64(1)));
+	for (const char *key : { "opaque_recorded", "taa_process_recorded", "taa_history_bootstrap", "frame_recording_completed" }) {
+		CHECK_FALSE(bool(state->outcome[key]));
+	}
+}
+
 TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Context invalidation revokes borrowed render data") {
 	Ref<RenderGpuOcclusionContext> context;
 	context.instantiate();
@@ -264,6 +442,13 @@ TEST_CASE("[Rendering][IndirectDraw][GPUOcclusion] Context invalidation revokes 
 }
 
 TEST_CASE("[SceneTree][Rendering][IndirectDraw][GPUOcclusion] Public API metadata preserves signed ranges and context getter types") {
+	const MethodBind *configure = ClassDB::get_method("RenderingServer", "viewport_configure_gpu_occlusion_prepass");
+	REQUIRE(configure != nullptr);
+	CHECK(configure->get_argument_count() == 4);
+	CHECK(configure->get_argument_type(3) == Variant::RID);
+	CHECK(configure->get_default_argument_count() == 1);
+	CHECK(configure->get_default_argument(3).get_type() == Variant::RID);
+	CHECK(RID(configure->get_default_argument(3)).is_null());
 	const MethodBind *registration = ClassDB::get_method("RenderingServer", "viewport_register_gpu_occlusion_consumer");
 	REQUIRE(registration != nullptr);
 	CHECK(registration->get_argument_count() == 7);

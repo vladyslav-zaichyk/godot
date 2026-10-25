@@ -1963,6 +1963,8 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	HashMap<RenderGeometryInstance *, GpuOcclusionDrawSelection> gpu_occlusion_selection;
 	LocalVector<uint8_t> gpu_occlusion_early_surfaces;
 	bool gpu_occlusion_split = false;
+	RendererCompositorStorage *compositor_storage = RendererCompositorStorage::get_singleton();
+	uint64_t gpu_occlusion_compositor_revision = 0;
 	uint32_t gpu_occlusion_early_count = 0;
 	if (gpu_occlusion.is_valid()) {
 		// Viewport owns the actual epoch. Never let a previous render's candidate
@@ -2411,14 +2413,15 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 				(p_render_data->render_region == Rect2i() || p_render_data->render_region == Rect2i(Point2i(), screen_size)) &&
 				screen_size.x > 0 && screen_size.y > 0 && screen_size == rb->get_target_size() &&
 				rb->get_scaling_3d_mode() == RSE::VIEWPORT_SCALING_3D_MODE_OFF &&
-				rb->get_vrs_mode() == RSE::VIEWPORT_VRS_DISABLED && !use_msaa && !using_taa &&
-				!motion_vectors_required && !using_motion_pass && !using_upscaling &&
-				RSG::viewport->get_num_viewports_with_motion_vectors() == 0 &&
-				RendererCompositorStorage::get_singleton()->get_num_compositor_effects_with_motion_vectors() == 0 &&
+				rb->get_vrs_mode() == RSE::VIEWPORT_VRS_DISABLED && !use_msaa &&
+				motion_vectors_required == using_taa && !using_motion_pass && !using_upscaling &&
+				RSG::viewport->viewport_gpu_occlusion_motion_is_supported(gpu_occlusion->viewport, using_taa) &&
+				(!using_taa || (!load_color && !draw_sky && !draw_sky_fog_only &&
+						(!p_render_data->environment.is_valid() || environment_get_background(p_render_data->environment) == RSE::ENV_BG_CLEAR_COLOR || environment_get_background(p_render_data->environment) == RSE::ENV_BG_COLOR))) &&
 				depth_pre_pass && depth_pass_mode == PASS_MODE_DEPTH && depth_pass_clear.is_empty() &&
 				!using_ssao && !using_ssil && !using_ssr && !using_sdfgi && !using_voxelgi && !using_separate_specular &&
 				!ce_needs_motion_vectors && !ce_needs_normal_roughness && !ce_needs_separate_specular &&
-				!p_render_data->compositor.is_valid() && !p_render_data->transparent_bg &&
+				compositor_storage->gpu_occlusion_observer_is_valid(p_render_data->compositor, gpu_occlusion->diagnostic_post_opaque_effect, using_taa) && !p_render_data->transparent_bg &&
 				!scene_state.used_opaque_stencil && !scene_state.used_sss && !scene_state.used_lightmap &&
 				!scene_state.used_screen_texture && !scene_state.used_normal_texture && !scene_state.used_depth_texture &&
 				render_list[RENDER_LIST_ALPHA].elements.is_empty() && render_list[RENDER_LIST_MOTION].elements.is_empty() &&
@@ -2476,6 +2479,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 					}
 				}
 				gpu_occlusion_split = true;
+				gpu_occlusion_compositor_revision = compositor_storage->get_gpu_occlusion_revision();
 				gpu_occlusion->outcome["auto_instancing_disabled"] = true;
 			} else {
 				gpu_occlusion->set_outcome("occluder_capacity_exceeded");
@@ -2556,7 +2560,10 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			context->invalidate();
 			const bool scope_intact = scope.close();
 			if (!scope_intact || metadata_revision != gpu_occlusion_signature_counter ||
-					gpu_occlusion->epoch != epoch || gpu_occlusion->configuration_generation != generation) {
+					gpu_occlusion->epoch != epoch || gpu_occlusion->configuration_generation != generation ||
+					gpu_occlusion_compositor_revision != compositor_storage->get_gpu_occlusion_revision() ||
+					!compositor_storage->gpu_occlusion_observer_is_valid(p_render_data->compositor, gpu_occlusion->diagnostic_post_opaque_effect, using_taa) ||
+					!RSG::viewport->viewport_gpu_occlusion_motion_is_supported(gpu_occlusion->viewport, using_taa)) {
 				gpu_occlusion->set_outcome("producer_scope_or_scene_mutation");
 				gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
 				RD::get_singleton()->draw_command_end_label();
@@ -2692,6 +2699,9 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 				RD::get_singleton()->draw_command_end_label();
 				return;
 			}
+			if (gpu_occlusion.is_valid() && gpu_occlusion->recording) {
+				gpu_occlusion->mark_opaque_recorded();
+			}
 		}
 
 		RD::get_singleton()->draw_command_end_label();
@@ -2738,7 +2748,20 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		}
 
 		RENDER_TIMESTAMP("Process Post Opaque Compositor Effects");
+		if (gpu_occlusion_split &&
+				(gpu_occlusion_compositor_revision != compositor_storage->get_gpu_occlusion_revision() ||
+						!compositor_storage->gpu_occlusion_observer_is_valid(p_render_data->compositor, gpu_occlusion->diagnostic_post_opaque_effect, using_taa) ||
+						!RSG::viewport->viewport_gpu_occlusion_motion_is_supported(gpu_occlusion->viewport, using_taa))) {
+			gpu_occlusion->set_outcome("observer_graph_mutation");
+			gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+			return;
+		}
 		_process_compositor_effects(RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_OPAQUE, p_render_data);
+		if (gpu_occlusion_split && gpu_occlusion_compositor_revision != compositor_storage->get_gpu_occlusion_revision()) {
+			gpu_occlusion->set_outcome("observer_graph_mutation");
+			gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+			return;
+		}
 	}
 
 	if (debug_voxelgis) {
@@ -3008,7 +3031,11 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		} else if (using_taa) {
 			RD::get_singleton()->draw_command_begin_label("TAA");
 			RENDER_TIMESTAMP("TAA");
+			const bool history_bootstrap = !rb->has_texture(SNAME("taa"), SNAME("history"));
 			taa->process(rb, rb->get_base_data_format(), p_render_data->scene_data->z_near, p_render_data->scene_data->z_far);
+			if (gpu_occlusion.is_valid() && gpu_occlusion->recording) {
+				gpu_occlusion->mark_taa_process_recorded(history_bootstrap);
+			}
 			RD::get_singleton()->draw_command_end_label();
 		}
 	}
@@ -3037,6 +3064,9 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 			sdfgi->debug_draw(p_render_data->scene_data->view_count, p_render_data->scene_data->view_projection, p_render_data->scene_data->cam_transform, size.x, size.y, rb->get_render_target(), source_texture, view_rids);
 		}
+	}
+	if (gpu_occlusion.is_valid() && gpu_occlusion->recording) {
+		gpu_occlusion->mark_frame_recording_completed();
 	}
 }
 

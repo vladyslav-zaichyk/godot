@@ -37,11 +37,14 @@ class RendererCompositorStorage {
 private:
 	static RendererCompositorStorage *singleton;
 	int num_compositor_effects_with_motion_vectors = 0;
+	// Saturates rather than reusing an identity after wraparound.
+	uint64_t gpu_occlusion_revision = 0;
+	void _gpu_occlusion_mark_changed();
 
 	// Compositor effect
 	struct CompositorEffect {
 		bool is_enabled = true;
-		RSE::CompositorEffectCallbackType callback_type;
+		RSE::CompositorEffectCallbackType callback_type = RSE::COMPOSITOR_EFFECT_CALLBACK_TYPE_MAX;
 		Callable callback;
 
 		BitField<RSE::CompositorEffectFlags> flags = {};
@@ -60,6 +63,9 @@ private:
 public:
 	static RendererCompositorStorage *get_singleton() { return singleton; }
 	int get_num_compositor_effects_with_motion_vectors() const { return num_compositor_effects_with_motion_vectors; }
+	uint64_t get_gpu_occlusion_revision() const { return gpu_occlusion_revision; }
+	bool gpu_occlusion_observer_effect_is_valid(RID p_effect) const;
+	bool gpu_occlusion_observer_is_valid(RID p_compositor, RID p_effect, bool p_using_taa) const;
 
 	RendererCompositorStorage();
 	virtual ~RendererCompositorStorage();

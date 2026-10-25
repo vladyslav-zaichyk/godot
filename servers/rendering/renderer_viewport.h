@@ -219,7 +219,8 @@ private:
 	void _resize_occlusion_culling_buffer(const Size2i &p_size);
 
 public:
-	Error viewport_configure_gpu_occlusion_prepass(RID p_viewport, uint32_t p_occluder_layer_mask, const Callable &p_producer);
+	Error viewport_configure_gpu_occlusion_prepass(RID p_viewport, uint32_t p_occluder_layer_mask, const Callable &p_producer, RID p_diagnostic_post_opaque_effect = RID());
+	bool viewport_gpu_occlusion_motion_is_supported(RID p_viewport, bool p_using_taa) const;
 	Error viewport_register_gpu_occlusion_consumer(RID p_viewport, RID p_geometry_instance, RID p_identity_bank, int64_t p_candidate_identity_base, RID p_candidate_commands, int64_t p_candidate_command_byte_offset, int64_t p_logical_slot_capacity);
 	Error viewport_unregister_gpu_occlusion_consumer(RID p_viewport, RID p_geometry_instance);
 	Error viewport_clear_gpu_occlusion_prepass(RID p_viewport);

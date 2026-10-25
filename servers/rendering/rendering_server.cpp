@@ -2923,7 +2923,7 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("viewport_set_use_taa", "viewport", "enable"), &RenderingServer::viewport_set_use_taa);
 	ClassDB::bind_method(D_METHOD("viewport_set_use_debanding", "viewport", "enable"), &RenderingServer::viewport_set_use_debanding);
 	ClassDB::bind_method(D_METHOD("viewport_set_use_occlusion_culling", "viewport", "enable"), &RenderingServer::viewport_set_use_occlusion_culling);
-	ClassDB::bind_method(D_METHOD("viewport_configure_gpu_occlusion_prepass", "viewport", "occluder_layer_mask", "producer"), &RenderingServer::viewport_configure_gpu_occlusion_prepass);
+	ClassDB::bind_method(D_METHOD("viewport_configure_gpu_occlusion_prepass", "viewport", "occluder_layer_mask", "producer", "diagnostic_post_opaque_effect"), &RenderingServer::viewport_configure_gpu_occlusion_prepass, DEFVAL(RID()));
 	ClassDB::bind_method(D_METHOD("viewport_register_gpu_occlusion_consumer", "viewport", "geometry_instance", "identity_bank", "candidate_identity_base", "candidate_commands", "candidate_command_byte_offset", "logical_slot_capacity"), &RenderingServer::viewport_register_gpu_occlusion_consumer);
 	ClassDB::bind_method(D_METHOD("viewport_unregister_gpu_occlusion_consumer", "viewport", "geometry_instance"), &RenderingServer::viewport_unregister_gpu_occlusion_consumer);
 	ClassDB::bind_method(D_METHOD("viewport_clear_gpu_occlusion_prepass", "viewport"), &RenderingServer::viewport_clear_gpu_occlusion_prepass);
