@@ -1,7 +1,8 @@
 # E13c: native TAA, GPU occlusion and E8 history
 
-Status: contract and numerical plan only, 2026-10-25. No native implementation,
-new editor/SDK, GLSL compilation or GPU execution accompanies this document.
+Status: E13c native implementation at51a2b912f4161aa289d5b1cced99deb41289f1e4,
+2026-10-25; numerical fixture prepared, new editor/SDK build pending. GLSL and
+GPU qualification require the new exact editor. No E13c GPU result is claimed.
 Audit source: `a5e1a2135cd673f00508c6b5b745d34d83f67d81`.
 The existing E13b editor remains native
 `3c3646629656d76133bf494edd937f2181a7e98b`, exact generated SDK
@@ -250,8 +251,11 @@ version the matrix and counts before execution rather than hide rendered frames.
 
 Per-record ledger strides: raw grid131072 bytes (fixed128x64x16), UBO5696,
 proof44236 (512 publication/ID/command/state-witness bytes +43724 Hi-Z). At128
-records the three ledgers total23168512 bytes. All allocation happens before
-recording. At most three terminal BufferGetData calls read these ledgers after
+records the three ledgers total23168512 bytes. All fixed GPU input and ledger
+banks are allocated before I000. Bounded descriptors may materialize on the
+first valid native texture identity inside callbacks; TAA creates those textures
+during rendering. No new descriptor allocation is permitted in the stress tail.
+At most three terminal BufferGetData calls read these ledgers after
 the run, never per-frame or to select GPU work. No image/screenshot files.
 Bound cached capture descriptor pairs to16; overflow fails the fixture.
 

@@ -1,6 +1,6 @@
 {
   "contract": "arena-e13c-native-taa-e8-plan-v2",
-  "status": "specified_not_implemented_or_gpu_run",
+  "status": "native_implemented_fixture_prepared_GPU_pending",
   "created_date": "2026-10-25",
   "audit_source_commit": "a5e1a2135cd673f00508c6b5b745d34d83f67d81",
   "audit_git_blob_sha256": {
@@ -33,14 +33,9 @@
     "E8_readiness_commit": "106d56fcb84f941576ce66b3a5290551c8ceef5e"
   },
   "implementation_required_before_gpu": [
-    "native_TAA_admission_and_E8_fallback_guards",
-    "explicit_matching_POST_OPAQUE_observer_RID_opt_in",
-    "frame_recording_outcome_metadata",
-    "matched_new_editor_SDK_and_compile_receipts",
-    "fixed_producer_and_capture_GLSL_stage_mapping",
-    "per_row_active_ids_pose_bits_triangles_pixel_sample_maps_and_visibility_reference",
-    "payload_shader_mesh_and_layout_hash_inventory",
-    "perspective_receipt_validator_and_rejection_checks"
+    "successful_separate_exact_editor_SDK_and_compile_receipts",
+    "integration_rerun_new_binary_E13b_and_corrected_E8",
+    "freeze_runtime_receipt_identities_then_explicit_GPU_slot"
   ],
   "native_admission_negative_cases_outside_GPU_matrix": [
     "dead_or_wrong_kind_observer_RID",
@@ -200,7 +195,9 @@
     },
     "ledger_total_bytes": 23168512,
     "per_frame_gpu_readbacks": 0,
-    "gpu_capture_not_a_frame_time_measurement": true
+    "gpu_capture_not_a_frame_time_measurement": true,
+    "bounded_descriptor_cache_first_use_materialization": true,
+    "stress_descriptor_allocations": 0
   },
   "input_work": {
     "pose_bytes_per_slot_per_bank": 64,
@@ -4247,9 +4244,9 @@
     }
   ],
   "qualification": {
-    "native_implementation_present": false,
+    "native_implementation_present": true,
     "new_build_present": false,
-    "GPU_suite_implemented": false,
+    "GPU_suite_implemented": true,
     "GPU_run": false,
     "resolved_TAA_quality": false,
     "performance": false,
@@ -4268,5 +4265,7 @@
       "retry_permitted": false
     }
   ],
-  "combined_actual_viewport_records": 128
+  "combined_actual_viewport_records": 128,
+  "native_implementation_commit": "51a2b912f4161aa289d5b1cced99deb41289f1e4",
+  "fixture_payload_status": "128_rows_frozen_in_project/scenarios.json; numerical validators pending final integrated CPU check"
 }

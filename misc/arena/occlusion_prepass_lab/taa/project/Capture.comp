@@ -1,0 +1,15 @@
+#version 450
+layout(local_size_x=8,local_size_y=8) in;
+layout(set=0,binding=0) uniform sampler2D native_velocity;
+layout(set=0,binding=1) uniform sampler2D native_depth;
+layout(set=0,binding=2) uniform sampler2D native_color;
+layout(set=0,binding=3,std430) buffer Raw{uvec4 pixels[];} raw;
+layout(set=0,binding=4,std430) buffer Proof{uint words[];} proof;
+layout(push_constant,std430) uniform Params{uint row;uint serial;uint width;uint height;uint samples[16];} pc;
+void main(){uvec2 p=gl_GlobalInvocationID.xy;if(p.x>=128u||p.y>=64u)return;
+uint at=pc.row*8192u+p.y*128u+p.x;
+if(p.x<pc.width&&p.y<pc.height){vec2 v=texelFetch(native_velocity,ivec2(p),0).xy;
+raw.pixels[at]=uvec4(floatBitsToUint(v),pc.serial,floatBitsToUint(texelFetch(native_depth,ivec2(p),0).r));}
+uint linear=p.y*128u+p.x;if(linear<16u&&pc.samples[linear]!=0xffffffffu){
+uint xy=pc.samples[linear];ivec2 q=ivec2(int(xy&65535u),int(xy>>16u));
+proof.words[pc.row*11059u+112u+linear]=floatBitsToUint(texelFetch(native_color,q,0).r);}}
