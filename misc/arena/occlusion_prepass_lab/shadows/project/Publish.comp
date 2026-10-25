@@ -1,0 +1,23 @@
+#version 450
+layout(local_size_x=8,local_size_y=8) in;
+layout(set=0,binding=0) uniform sampler2D native_depth;
+layout(set=0,binding=1,std430) buffer Early { uint words[]; } early;
+layout(set=0,binding=2,std430) buffer Ids { uint words[]; } ids;
+layout(set=0,binding=3,std430) buffer Command { uint words[]; } command;
+layout(push_constant,std430) uniform Params {
+    uint row;uint serial;uint epoch_lo;uint epoch_hi;
+    uint generation_lo;uint generation_hi;uint width;uint height;
+    uint candidate_count;uint candidate0;uint candidate1;uint candidate2;
+} pc;
+void main() {
+    uvec2 p=gl_GlobalInvocationID.xy;if(p.x>=128u||p.y>=128u)return;
+    uint at=p.y*128u+p.x,base=pc.row*16400u;
+    if(p.x<pc.width&&p.y<pc.height)early.words[base+16u+at]=floatBitsToUint(texelFetch(native_depth,ivec2(p),0).r);
+    if(at==0u) {
+        early.words[base]=pc.serial;early.words[base+1u]=pc.width;early.words[base+2u]=pc.height;
+        early.words[base+3u]=pc.epoch_lo;early.words[base+4u]=pc.epoch_hi;early.words[base+5u]=pc.generation_lo;early.words[base+6u]=pc.generation_hi;
+        // A controlled publication isolates native pass routing. This is deliberately NOT a Hi-Z algorithm.
+        ids.words[16u]=pc.candidate0;ids.words[17u]=pc.candidate1;ids.words[18u]=pc.candidate2;
+        command.words[4u]=36u;command.words[5u]=pc.candidate_count;command.words[6u]=0u;command.words[7u]=0u;command.words[8u]=16u;
+    }
+}

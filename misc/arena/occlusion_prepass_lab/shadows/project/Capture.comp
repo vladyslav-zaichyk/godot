@@ -1,0 +1,19 @@
+#version 450
+layout(local_size_x=8,local_size_y=8) in;
+layout(set=0,binding=0) uniform sampler2D native_velocity;
+layout(set=0,binding=1) uniform sampler2D native_depth;
+layout(set=0,binding=2) uniform sampler2D native_color;
+layout(set=0,binding=3,std430) buffer Raw { uint words[]; } raw;
+layout(push_constant,std430) uniform Params { uint row;uint serial;uint width;uint height; } pc;
+void main() {
+    uvec2 p=gl_GlobalInvocationID.xy;if(p.x>=128u||p.y>=128u)return;
+    uint linear=p.y*128u+p.x,base=pc.row*131088u;
+    if(linear==0u){raw.words[base]=pc.serial;raw.words[base+1u]=pc.width;raw.words[base+2u]=pc.height;}
+    if(p.x>=pc.width||p.y>=pc.height)return;
+    uint at=base+16u+linear*8u;vec3 color=texelFetch(native_color,ivec2(p),0).rgb;
+    vec2 velocity=texelFetch(native_velocity,ivec2(p),0).xy;
+    raw.words[at]=floatBitsToUint(color.r);raw.words[at+1u]=floatBitsToUint(color.g);raw.words[at+2u]=floatBitsToUint(color.b);
+    raw.words[at+3u]=floatBitsToUint(texelFetch(native_depth,ivec2(p),0).r);
+    raw.words[at+4u]=floatBitsToUint(velocity.x);raw.words[at+5u]=floatBitsToUint(velocity.y);
+    raw.words[at+6u]=0u;raw.words[at+7u]=0u;
+}
