@@ -86,7 +86,7 @@ def synthetic(mode):
         for kind, choices in probes.items():
             for choice in choices:
                 for arm, sample in enumerate(choice['samples']):
-                    light = 1. if arm == 0 or kind == 'lit' else 0.
+                    light = 1. if arm == 0 or gate.expected_lit_group(kind) else 0.
                     index = start + arm; old = gate.decode_scene(blobs['ubo'], index * gate.UBO_STRIDE + 2848)
                     velocity = gate.velocity_at(scenes[index], old, sample['world'], sample['world'])
                     put_floats(blobs['raw'], pixel_offset(index, sample), [light, 0., .25, sample['depth'], *velocity, 0., 0.])
@@ -139,7 +139,8 @@ class ShadowGate(unittest.TestCase):
         self.assertEqual(verdict['candidate_selected_records'], 9)
         self.assertEqual(verdict['producer_rejected_records'], 1)
         self.assertEqual(verdict['receiver_shadow_probes'], 68)
-        self.assertEqual(verdict['receiver_lit_probes'], 40)
+        self.assertEqual(verdict['receiver_lit_probes'], 44)
+        self.assertEqual(verdict['departed_caster_lit_probes'], 4)
         self.assertEqual(verdict['accepted_zero_body_probes'], 4)
         self.assertGreaterEqual(verdict['nonzero_motion_probes'], 8)
         self.assertFalse(verdict['native_qualified'])
@@ -176,6 +177,16 @@ class ShadowGate(unittest.TestCase):
         def mutate(p, r, b, s, v):
             put_floats(b['raw'], pixel_offset(0, s[0][2][0]['samples'][0]), [0.])
         with self.assertRaisesRegex(ValueError, 'not visibly lit'):
+            self.run_gate(mutate)
+
+    def test_dead_caster_shadow_in_both_arms_rejected(self):
+        def mutate(p, r, b, s, v):
+            # Identical stale shadows in reference AND candidate must not pass
+            # merely because their lighting agrees and active=0 was published.
+            for arm in (1, 2):
+                sample = s[5]['departed_id2'][0]['samples'][arm]
+                put_floats(b['raw'], pixel_offset(15 + arm, sample), [0.])
+        with self.assertRaisesRegex(ValueError, 'Lit witness'):
             self.run_gate(mutate)
 
     def test_offcamera_caster_shadow_lost_rejected(self):

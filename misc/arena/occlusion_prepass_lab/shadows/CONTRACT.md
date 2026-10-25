@@ -1,11 +1,13 @@
 # E13e: camera occlusion with directional shadows
 
-Status: proposed native contract and prepared source stand, 2026-10-25. This
-stage changes no native rendering code, public API or editor build. The control
-is native `3365639cceb0767a8f44f908d8823edf60e14424`, exact generated SDK
-`4.7.2-arena-dev-g3365639cce`. That editor still rejects the combination with
-`unsupported_view` and renders the complete fallback. A reference-boundary pass
-cannot qualify simultaneous shadow rendering and camera candidate selection.
+Status: E13e native directional admission implemented, separate editor/SDK
+qualification in progress, 2026-10-25. The delivery manifest identifies the
+exact new native commit and matching SDK. GPU execution remains deferred until
+integration releases A/B. The unchanged control is native
+`3365639cceb0767a8f44f908d8823edf60e14424`, exact generated SDK
+`4.7.2-arena-dev-g3365639cce`; it still rejects the combination with
+`unsupported_view` and renders the complete fallback. Its reference-boundary
+result cannot qualify simultaneous shadows and candidate selection.
 
 ## Purpose and first boundary
 
@@ -15,7 +17,7 @@ shadow onto visible ground. Camera occlusion never establishes light occlusion.
 This is a compatibility change; it does not reduce full shadow caster work or
 promise an FPS improvement.
 
-First proposed native scope: Windows x64, Vulkan Forward+, one centered
+First implemented native scope: Windows x64, Vulkan Forward+, one centered
 perspective view at native resolution, opaque E8 shader-driven MultiMesh,
 native TAA and the existing explicitly registered E13c numerical observer.
 Permit at most one visible shadow-enabled light, an ordinary directional light
@@ -30,7 +32,8 @@ history and capacity restrictions. Do not widen the compositor exception.
 Exclude cascades, spot/omni/cube shadows, multiple shadow lights, XR, additional
 motion-demanding views, transparency, temporal upscaling and generic screen/GI
 effects. The first stand does not qualify real VAT, eight LOD owners, production
-lighting, resolved TAA appearance or TAA-off positive admission.
+lighting or resolved TAA appearance. The new shadow-enabled admission requires
+native TAA/E8; the prior shadow-free TAA-on/off paths retain their permissions.
 
 ## Ownership and two lists
 
@@ -69,7 +72,7 @@ excludes main-camera billboards, view-dependent pose, divergent TIME input,
 POSITION writes and replacement of MODELVIEW_MATRIX/PROJECTION_MATRIX. Native
 checks do not prove shader semantics. This remains a trusted-caller contract.
 
-## Required native follow-up
+## Native admission and ordering
 
 Preserve the existing order:
 
@@ -92,9 +95,9 @@ and remaining depth. Preserve these boundaries; add no scene render, frame,
 readback or fence. Keep E13d ordinary opaque batching and light-list batching
 independent.
 
-The current blanket shadow rejection must not simply be deleted. Before
-admission, inspect the raw scheduled shadow work and the complete visible light
-state; derived shadow lists are populated later. For the narrow accepted case,
+The native check replaces blanket rejection with an exact raw-work/light
+snapshot. Before admission, inspect the raw scheduled shadow work and the
+complete visible light state; derived shadow lists are populated later. For the narrow accepted case,
 require exactly one raw work item, matching the admitted directional light,
 split/pass zero and Orthogonal mode. Even an empty directional caster list has
 one scheduled item in this path. Zero work does not establish a cached
@@ -102,11 +105,16 @@ directional success. Unsupported, missing or mismatched work selects fallback.
 
 Snapshot/revalidate the admitted light instance/base identity, shadow mode and
 enablement, transform, relevant finite parameters, masks, sky mode and reverse
-cull, as well as the visible shadow-light set and raw work tuple. Recheck around
-producer execution and before shadow recording. `light_get_version()` alone is
+cull, effective current shadow projection/transform/range/UV metadata and
+directional atlas size/texture RID, as well as the visible shadow-light set and
+raw work tuple. Recheck immediately before the producer, after it and immediately
+before shadow recording. Do not compare after native atlas setup legitimately
+changes its state. `light_get_version()` alone is
 insufficient: transform and some sky/color setters do not change that version.
 Arbitrary callback scene mutations remain forbidden; structural checks do not
-turn trusted callbacks into a sandbox.
+turn trusted callbacks into a sandbox. Renderer quality, atlas precision and
+other state lacking comprehensive snapshot getters remain caller-frozen;
+there is no arbitrary rendering-server mutation guarantee.
 
 Validation has O(visible lights) work, O(1) retained shadow snapshot and one raw
 shadow item in the admitted case. The visible CPU light list is not bounded by
@@ -115,7 +123,9 @@ than one work item; never silently truncate the visible-light scan. Preserve
 existing epoch, callback, command-capacity and alias checks. Failed admission or
 acknowledgment retains complete fallback; never use a stale candidate. A fatal
 recording failure aborts the view and follows existing temporal recovery rules.
-No new public API is required for the proposed first patch.
+No new public API, shader bank or shadow visibility list is added. Snapshot
+capture/equality is a plain CPU helper used by the renderer and native tests.
+It owns no light RID, scene object or GPU allocation.
 
 Audit source: `b3a5052febb4b338526bad096fcf05a8d423b88a`:
 
@@ -184,6 +194,10 @@ reading lighting. Ray/box tests establish caster attribution and camera
 visibility independently. Each shadow-enabled arm must show a preregistered
 shadow delta against its caster-OFF counterfactual, while a lit control and
 receiver identity/depth remain valid. Two dark images alone prove nothing.
+Four additional expected-lit witnesses cover ID 2's departed shadow footprint
+in S05. Both full-reference and selected arms must stop casting after death;
+equal stale shadows in both arms are a failure. This adds oracle probes only,
+without changing the frozen plan, thresholds, frame count or GPU capacity.
 Frozen thresholds include shadow delta at least 0.20, lit counterfactual at
 least 0.15, retained delta at least 90%, requested/reference color error at most
 0.03, depth tolerance 1e-5 and motion tolerance 2^-12. Reject a run without at
@@ -209,13 +223,13 @@ prove oracle discrimination only. Neither compiles GLSL through the driver nor
 qualifies real shadow rendering. The existing native336 reference must report
 fallback/`unsupported_view`; it cannot pass the combined-required gate.
 
-After the integrator releases the GPU slot: run the reference-boundary gate on
-the preserved control; implement the narrow native admission patch in isolation;
-build it separately; run combined-required and existing E13b/E8/E13c/E13d gates
-on that exact editor/SDK. Extend native negative coverage for multiple lights,
-cascades, positional shadows, missing/mismatched raw work and forbidden producer
-mutation, including fallback restoration. Those future native negatives are not
-claimed by this source-only stand. Resolved TAA appearance, real animation,
+Native CPU contracts cover full-list admission, unsupported shadow work,
+snapshot/equality mutation and restoration using the actual helper; they do not
+execute rendering-server setters inside a live producer or qualify GPU work.
+After the integrator releases the GPU slot, use reference-boundary only with
+the preserved control, then run combined-required and existing E13b/E8/E13c/E13d
+gates on the exact new editor/SDK. Live unsupported-light and callback-mutation
+regressions remain runtime gates. Resolved TAA appearance, real animation,
 multiple LOD owners and shadow quality each require later integration evidence.
 
 Only then compare full frames with identical lighting/casters: E13 OFF, E13 ON
