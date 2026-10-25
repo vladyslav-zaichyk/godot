@@ -223,3 +223,35 @@ The same separate editor carries BufferRD's explicit tutorial-tag correction.
 There is no documentation-only build. Clean editor resource import and GPU
 execution have separate gates; the XML correction does not claim to fix the
 independently observed CLI documentation-dump singleton/access violation.
+
+## E13e directional shadows with camera occlusion
+
+E13e admits one ordinary Orthogonal directional shadow split with native TAA/E8
+and matching raw shadow work. It scans the complete visible CPU light list and
+snapshots finite light/current-shadow metadata, masks, identities and directional
+atlas size/texture. Rechecks around the producer and before native shadow setup
+reject post-admission mutation. Unsupported initial views retain fallback.
+Shadow-free TAA-on/off admission and E13d batching retain their existing behavior.
+
+Camera depth/color/velocity can use selected candidates; native shadow lists
+always use persistent complete fallback commands AND immutable complete IDs.
+Freeze current poses/lifecycle through all passes, keep conservative off-camera
+caster bounds and collapse inactive bodies to zero-area geometry in every view.
+The effective custom shader must deform identically before applying each pass's
+native view matrices. This trusted contract adds no public API, transform bank,
+shadow-culling algorithm, frame or fence. Quality/atlas precision stay frozen;
+structural checks are not an arbitrary callback/shader sandbox.
+
+See `misc/arena/occlusion_prepass_lab/shadows/CONTRACT.md` and the 16-slot stand,
+packaged as `occlusion_shadow_lab/`. Its 30 measured TAA rows plus I000 cover
+hidden/offscreen casters, actual zero-candidate routing, ACK fallback and caster
+death/reuse. A caster-OFF counterfactual proves real shadow observability; four
+expected-lit departed-shadow probes reject identical stale reference/candidate
+shadows. Geometry, thresholds and GPU capacity remain frozen.
+
+Use the separate exact editor/SDK/receipt with `--gate combined-required`.
+Old native3365639 remains a reference-boundary fallback control. Compiler/CPU
+evidence cannot qualify native GPU rendering, VAT, eight LOD owners, resolved
+TAA quality, physical VRAM or FPS. Exact-new-binary combined and E13b/E8/E13c/
+E13d GPU gates wait for integration A/B release; existing editor bundles remain
+immutable controls. Cascades, positional and multiple shadow lights are excluded.

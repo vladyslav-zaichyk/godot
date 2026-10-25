@@ -34,6 +34,7 @@
 
 #include "core/config/project_settings.h"
 #include "servers/rendering/gpu_occlusion_repeat.h"
+#include "servers/rendering/gpu_occlusion_shadow.h"
 #include "servers/rendering/renderer_rd/environment/fog.h"
 #include "servers/rendering/renderer_rd/framebuffer_cache_rd.h"
 #include "servers/rendering/renderer_rd/storage_rd/light_storage.h"
@@ -1968,6 +1969,106 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	HashMap<RenderGeometryInstance *, GpuOcclusionDrawSelection> gpu_occlusion_selection;
 	LocalVector<uint8_t> gpu_occlusion_early_surfaces;
 	bool gpu_occlusion_split = false;
+	using OcclusionShadowLight = GpuOcclusionShadow::LightSnapshot<RSE::LIGHT_PARAM_MAX, real_t>;
+	using OcclusionShadowSnapshot = GpuOcclusionShadow::Snapshot<RSE::LIGHT_PARAM_MAX, real_t>;
+	OcclusionShadowSnapshot gpu_occlusion_shadow_snapshot;
+	auto gpu_occlusion_get_shadow_light = [&](uint32_t p_index, OcclusionShadowLight &r_light) {
+		const RID instance = (*p_render_data->lights)[p_index];
+		if (!light_storage->owns_light_instance(instance)) {
+			return false;
+		}
+		const RID base = light_storage->light_instance_get_base_light(instance);
+		if (!light_storage->owns_light(base)) {
+			return false;
+		}
+		r_light.shadow_enabled = light_storage->light_has_shadow(base);
+		if (!r_light.shadow_enabled) {
+			return true;
+		}
+		r_light.instance = instance.get_id();
+		r_light.base = base.get_id();
+		r_light.light_type = light_storage->light_get_type(base);
+		r_light.directional = r_light.light_type == RSE::LIGHT_DIRECTIONAL;
+		if (!r_light.directional) {
+			return true;
+		}
+		r_light.directional_mode = light_storage->light_directional_get_shadow_mode(base);
+		r_light.orthogonal = r_light.directional_mode == RSE::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL;
+		r_light.sky_mode = light_storage->light_directional_get_sky_mode(base);
+		r_light.sky_only = r_light.sky_mode == RSE::LIGHT_DIRECTIONAL_SKY_MODE_SKY_ONLY;
+		if (!r_light.orthogonal || r_light.sky_only) {
+			return true;
+		}
+		// Version alone misses transform, color and directional sky-mode changes.
+		// Retain the effective current shadow projection as well as its inputs.
+		r_light.version = light_storage->light_get_version(base);
+		r_light.projector = light_storage->light_get_projector(base).get_id();
+		r_light.atlas_texture = light_storage->directional_shadow_get_texture().get_id();
+		r_light.atlas_size = light_storage->directional_shadow_get_size();
+		r_light.reverse_cull = light_storage->light_get_reverse_cull_face_mode(base);
+		r_light.blend_splits = light_storage->light_directional_get_blend_splits(base);
+		r_light.negative = light_storage->light_is_negative(base);
+		r_light.distance_fade = light_storage->light_is_distance_fade_enabled(base);
+		r_light.bake_mode = light_storage->light_get_bake_mode(base);
+		r_light.cull_mask = light_storage->light_get_cull_mask(base);
+		r_light.instance_cull_mask = light_storage->light_instance_get_cull_mask(instance);
+		r_light.caster_mask = light_storage->light_get_shadow_caster_mask(base);
+		r_light.max_sdfgi_cascade = light_storage->light_get_max_sdfgi_cascade(base);
+		const Transform3D transform = light_storage->light_instance_get_base_transform(instance);
+		const Transform3D shadow_transform = light_storage->light_instance_get_shadow_transform(instance, 0);
+		const Projection shadow_camera = light_storage->light_instance_get_shadow_camera(instance, 0);
+		for (uint32_t column = 0; column < 3; column++) {
+			for (uint32_t row = 0; row < 3; row++) {
+				r_light.transform[column * 3 + row] = transform.basis[column][row];
+				r_light.shadow_transform[column * 3 + row] = shadow_transform.basis[column][row];
+			}
+			r_light.transform[9 + column] = transform.origin[column];
+			r_light.shadow_transform[9 + column] = shadow_transform.origin[column];
+		}
+		for (uint32_t column = 0; column < 4; column++) {
+			for (uint32_t row = 0; row < 4; row++) {
+				r_light.shadow_camera[column * 4 + row] = shadow_camera[column][row];
+			}
+		}
+		for (uint32_t i = 0; i < RSE::LIGHT_PARAM_MAX; i++) {
+			r_light.parameters[i] = light_storage->light_get_param(base, RSE::LightParam(i));
+		}
+		const Color color = light_storage->light_get_color(base);
+		for (uint32_t i = 0; i < 4; i++) {
+			r_light.color[i] = color[i];
+		}
+		r_light.distance_fade_parameters[0] = light_storage->light_get_distance_fade_begin(base);
+		r_light.distance_fade_parameters[1] = light_storage->light_get_distance_fade_shadow(base);
+		r_light.distance_fade_parameters[2] = light_storage->light_get_distance_fade_length(base);
+		r_light.shadow_range = light_storage->light_instance_get_shadow_range(instance, 0);
+		r_light.shadow_range_begin = light_storage->light_instance_get_shadow_range_begin(instance, 0);
+		r_light.shadow_split = light_storage->light_instance_get_directional_shadow_split(instance, 0);
+		r_light.shadow_texel_size = light_storage->light_instance_get_directional_shadow_texel_size(instance, 0);
+		r_light.shadow_bias_scale = light_storage->light_instance_get_shadow_bias_scale(instance, 0);
+		const Vector2 uv_scale = light_storage->light_instance_get_shadow_uv_scale(instance, 0);
+		r_light.shadow_uv_scale[0] = uv_scale.x;
+		r_light.shadow_uv_scale[1] = uv_scale.y;
+		return true;
+	};
+	auto gpu_occlusion_check_shadow_state = [&](bool p_capture) {
+		if (!p_render_data->lights) {
+			return false;
+		}
+		GpuOcclusionShadow::RawWork work;
+		const GpuOcclusionShadow::RawWork *work_ptr = nullptr;
+		if (p_render_data->render_shadow_count == 1 && p_render_data->render_shadows) {
+			work.light = p_render_data->render_shadows[0].light.get_id();
+			work.pass = p_render_data->render_shadows[0].pass;
+			work_ptr = &work;
+		}
+		const bool derived_lists_empty = p_render_data->directional_shadows.is_empty() && p_render_data->shadows.is_empty() && p_render_data->cube_shadows.is_empty();
+		if (p_capture) {
+			return GpuOcclusionShadow::capture(p_render_data->lights->size(), gpu_occlusion_get_shadow_light,
+					p_render_data->render_shadow_count, work_ptr, derived_lists_empty, gpu_occlusion_shadow_snapshot);
+		}
+		return GpuOcclusionShadow::matches(gpu_occlusion_shadow_snapshot, p_render_data->lights->size(), gpu_occlusion_get_shadow_light,
+				p_render_data->render_shadow_count, work_ptr, derived_lists_empty);
+	};
 	RendererCompositorStorage *compositor_storage = RendererCompositorStorage::get_singleton();
 	uint64_t gpu_occlusion_compositor_revision = 0;
 	uint32_t gpu_occlusion_early_count = 0;
@@ -2439,8 +2540,6 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 				!scene_state.used_opaque_stencil && !scene_state.used_sss && !scene_state.used_lightmap &&
 				!scene_state.used_screen_texture && !scene_state.used_normal_texture && !scene_state.used_depth_texture &&
 				render_list[RENDER_LIST_ALPHA].elements.is_empty() && render_list[RENDER_LIST_MOTION].elements.is_empty() &&
-				p_render_data->render_shadow_count == 0 && p_render_data->directional_shadows.is_empty() &&
-				p_render_data->shadows.is_empty() && p_render_data->cube_shadows.is_empty() &&
 				p_render_data->reflection_probes->size() == 0 && p_render_data->voxel_gi_instances->size() == 0 &&
 				p_render_data->render_sdfgi_region_count == 0 && !rb->has_custom_data(RB_SCOPE_FOG) &&
 				(!p_render_data->environment.is_valid() || !environment_get_volumetric_fog_enabled(p_render_data->environment)) &&
@@ -2448,15 +2547,9 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 				!_needs_post_prepass_render(p_render_data, false);
 #endif
 		if (supported) {
-			// A cached shadow atlas may be used even when this render schedules
-			// no new shadow draws. Exclude shadow-enabled lights, not only worklists.
-			for (uint32_t i = 0; i < p_render_data->lights->size(); i++) {
-				const RID light_instance = (*p_render_data->lights)[i];
-				if (light_storage->light_has_shadow(light_storage->light_instance_get_base_light(light_instance))) {
-					supported = false;
-					break;
-				}
-			}
+			// Raw work is authoritative here: derived shadow lists are filled
+			// later. A cached positional atlas must not masquerade as no shadows.
+			supported = gpu_occlusion_check_shadow_state(true) && (!gpu_occlusion_shadow_snapshot.has_directional || using_taa);
 		}
 		if (supported) {
 			const RID depth = rb->get_depth_texture(0);
@@ -2532,6 +2625,12 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 				RD::get_singleton()->draw_command_end_label();
 				return;
 			}
+			if (!gpu_occlusion_check_shadow_state(false)) {
+				gpu_occlusion->set_outcome("shadow_state_mutation");
+				gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+				RD::get_singleton()->draw_command_end_label();
+				return;
+			}
 
 			struct ProducerScope {
 				bool active = true;
@@ -2568,6 +2667,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			context->invalidate();
 			const bool scope_intact = scope.close();
 			if (!scope_intact || metadata_revision != gpu_occlusion_signature_counter ||
+					!gpu_occlusion_check_shadow_state(false) ||
 					gpu_occlusion->epoch != epoch || gpu_occlusion->configuration_generation != generation ||
 					gpu_occlusion_compositor_revision != compositor_storage->get_gpu_occlusion_revision() ||
 					!compositor_storage->gpu_occlusion_observer_is_valid(p_render_data->compositor, gpu_occlusion->diagnostic_post_opaque_effect, using_taa) ||
@@ -2652,6 +2752,16 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			normal_roughness_views[v] = rb_data->get_normal_roughness(v);
 		}
 	}
+	if (gpu_occlusion_split && !gpu_occlusion_check_shadow_state(false)) {
+		// Camera depth may already contain candidates. Switching only color to
+		// fallback would produce an incoherent view; abort temporal recording.
+		gpu_occlusion->set_outcome("shadow_state_mutation");
+		gpu_occlusion->outcome["mode"] = "FRAME_REJECTED";
+		return;
+	}
+	// Native shadow lists carry no camera command override. They retain the
+	// persistent complete fallback command and its caller-owned immutable IDs;
+	// early depth and camera color keep their separate candidate selection.
 	_pre_opaque_render(p_render_data, using_ssao, using_ssil, using_ssr, using_sdfgi || using_voxelgi, normal_roughness_views, rb_data.is_valid() && rb_data->has_voxelgi() ? rb_data->get_voxelgi() : RID());
 
 	if (current_cluster_builder) {
