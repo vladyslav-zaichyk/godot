@@ -52,6 +52,10 @@ public:
 		bool in_use = false;
 		uint32_t slot_index = 0;
 		AHashMap<const Nav3D::Polygon *, uint32_t> poly_to_id;
+		// Arena modification: the path corridor's entries the last query wrote, so that the next one
+		// resets only those, and whether all of them have been reset since the corridor was made.
+		LocalVector<uint32_t> touched_polys;
+		bool corridor_reset = false;
 	};
 
 	struct NavMeshPathQueryTask3D {
