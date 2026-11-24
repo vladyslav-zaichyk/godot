@@ -407,6 +407,8 @@ void NavMapBuilder3D::_build_update_map_iteration(NavMapIterationBuild3D &r_buil
 		p_path_query_slot.path_corridor.clear();
 
 		p_path_query_slot.path_corridor.resize(total_polygon_count);
+		p_path_query_slot.touched_polys.clear();
+		p_path_query_slot.corridor_reset = false;
 
 		p_path_query_slot.poly_to_id.clear();
 		p_path_query_slot.poly_to_id.reserve(total_polygon_count);

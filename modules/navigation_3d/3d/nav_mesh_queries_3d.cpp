@@ -32,6 +32,7 @@
 
 #include "../nav_base_3d.h"
 #include "../nav_map_3d.h"
+#include "nav_polygon_grid_3d.h"
 #include "nav_region_iteration_3d.h"
 
 #include "core/math/geometry_3d.h"
@@ -234,6 +235,43 @@ void NavMeshQueries3D::map_query_path(NavMap3D *map, const Ref<NavigationPathQue
 	}
 }
 
+// Arena modification: the closest point to p_point on a region's polygons, from the polygons its
+// grid gives near the point. Each polygon is measured face by face, as the scan of all of them
+// measured it, and ties go to the polygon that scan met first.
+static void _region_find_closest_face_point(const NavRegionIteration3D &p_region, const Vector3 &p_point, real_t &r_distance, const Polygon *&r_polygon, Vector3 &r_position) {
+	const NavPolygonGrid3D &grid = p_region.get_polygon_grid();
+	real_t distance_squared = r_distance < FLT_MAX ? r_distance * r_distance : FLT_MAX;
+	if (grid.is_empty() || NavPolygonGrid3D::is_beyond(NavPolygonGrid3D::aabb_distance_squared(p_region.get_bounds(), p_point), distance_squared)) {
+		return;
+	}
+
+	const LocalVector<Polygon> &polygons = p_region.get_navmesh_polygons();
+	bool found_here = false;
+	uint32_t found_index = 0;
+	grid.search(p_point, distance_squared, [&](uint32_t p_index) {
+		const Polygon &polygon = polygons[p_index];
+		real_t polygon_distance = FLT_MAX;
+		Vector3 polygon_point;
+		for (uint32_t point_id = 2; point_id < polygon.vertices.size(); point_id++) {
+			const Face3 face(polygon.vertices[0], polygon.vertices[point_id - 1], polygon.vertices[point_id]);
+			const Vector3 point = face.get_closest_point_to(p_point);
+			const real_t distance_to_point = point.distance_to(p_point);
+			if (distance_to_point < polygon_distance) {
+				polygon_distance = distance_to_point;
+				polygon_point = point;
+			}
+		}
+		if (polygon_distance < r_distance || (found_here && polygon_distance == r_distance && p_index < found_index)) {
+			r_distance = polygon_distance;
+			r_polygon = &polygon;
+			r_position = polygon_point;
+			distance_squared = polygon_distance * polygon_distance;
+			found_here = true;
+			found_index = p_index;
+		}
+	});
+}
+
 void NavMeshQueries3D::_query_task_find_start_end_positions(NavMeshPathQueryTask3D &p_query_task, const NavMapIteration3D &p_map_iteration) {
 	real_t begin_d = FLT_MAX;
 	real_t end_d = FLT_MAX;
@@ -245,34 +283,14 @@ void NavMeshQueries3D::_query_task_find_start_end_positions(NavMeshPathQueryTask
 			continue;
 		}
 
-		// Find the initial poly and the end poly on this map.
-		for (const Polygon &p : region->get_navmesh_polygons()) {
-			// Only consider the polygon if it in a region with compatible layers.
-			if ((p_query_task.navigation_layers & p.owner->get_navigation_layers()) == 0) {
-				continue;
-			}
-
-			// For each face check the distance between the origin/destination.
-			for (uint32_t point_id = 2; point_id < p.vertices.size(); point_id++) {
-				const Face3 face(p.vertices[0], p.vertices[point_id - 1], p.vertices[point_id]);
-
-				Vector3 point = face.get_closest_point_to(p_query_task.start_position);
-				real_t distance_to_point = point.distance_to(p_query_task.start_position);
-				if (distance_to_point < begin_d) {
-					begin_d = distance_to_point;
-					p_query_task.begin_polygon = &p;
-					p_query_task.begin_position = point;
-				}
-
-				point = face.get_closest_point_to(p_query_task.target_position);
-				distance_to_point = point.distance_to(p_query_task.target_position);
-				if (distance_to_point < end_d) {
-					end_d = distance_to_point;
-					p_query_task.end_polygon = &p;
-					p_query_task.end_position = point;
-				}
-			}
+		// Only consider the polygons of a region with compatible layers.
+		if ((p_query_task.navigation_layers & region->get_navigation_layers()) == 0) {
+			continue;
 		}
+
+		// Find the initial poly and the end poly on this map.
+		_region_find_closest_face_point(**region, p_query_task.start_position, begin_d, p_query_task.begin_polygon, p_query_task.begin_position);
+		_region_find_closest_face_point(**region, p_query_task.target_position, end_d, p_query_task.end_polygon, p_query_task.end_position);
 	}
 }
 
@@ -312,6 +330,8 @@ void NavMeshQueries3D::_query_task_search_polygon_connections(NavMeshPathQueryTa
 		} else {
 			neighbor_poly.poly = p_connection.polygon;
 			traversable_polys.push(&neighbor_poly);
+			// Arena modification: written, so the next query resets it.
+			p_query_task.path_query_slot->touched_polys.push_back((uint32_t)(&neighbor_poly - navigation_polys.ptr()));
 		}
 	}
 }
@@ -328,12 +348,25 @@ void NavMeshQueries3D::_query_task_build_path_corridor(NavMeshPathQueryTask3D &p
 			&traversable_polys = p_query_task.path_query_slot->traversable_polys;
 	traversable_polys.clear();
 
+	// Arena modification: reset only the entries the last query wrote, after one reset of all of
+	// them when the corridor is made. A query of a few metres used to reset all 24,000 of an
+	// island's polygons.
 	LocalVector<NavigationPoly> &navigation_polys = p_query_task.path_query_slot->path_corridor;
-	for (NavigationPoly &polygon : navigation_polys) {
-		polygon.reset();
+	LocalVector<uint32_t> &touched_polys = p_query_task.path_query_slot->touched_polys;
+	if (!p_query_task.path_query_slot->corridor_reset) {
+		for (NavigationPoly &polygon : navigation_polys) {
+			polygon.reset();
+		}
+		p_query_task.path_query_slot->corridor_reset = true;
+	} else {
+		for (uint32_t touched_id : touched_polys) {
+			navigation_polys[touched_id].reset();
+		}
 	}
+	touched_polys.clear();
 
 	// Initialize the matching navigation polygon.
+	touched_polys.push_back(p_query_task.path_query_slot->poly_to_id[begin_poly]);
 	NavigationPoly &begin_navigation_poly = navigation_polys[p_query_task.path_query_slot->poly_to_id[begin_poly]];
 	begin_navigation_poly.poly = begin_poly;
 	begin_navigation_poly.entry = begin_point;
@@ -446,9 +479,10 @@ void NavMeshQueries3D::_query_task_build_path_corridor(NavMeshPathQueryTask3D &p
 				return;
 			}
 
-			for (NavigationPoly &nav_poly : navigation_polys) {
-				nav_poly.poly = nullptr;
-				nav_poly.traveled_distance = FLT_MAX;
+			// Arena modification: the entries not written are as the reset left them.
+			for (uint32_t touched_id : touched_polys) {
+				navigation_polys[touched_id].poly = nullptr;
+				navigation_polys[touched_id].traveled_distance = FLT_MAX;
 			}
 			uint32_t _bp_id = p_query_task.path_query_slot->poly_to_id[begin_poly];
 			navigation_polys[_bp_id].poly = begin_poly;
@@ -958,75 +992,93 @@ RID NavMeshQueries3D::map_iteration_get_closest_point_owner(const NavMapIteratio
 	return cp.owner;
 }
 
+// Arena modification: the closest point to p_point on p_polygon, as
+// map_iteration_get_closest_point_info measured it in its scan of all the polygons. Returns its
+// squared distance. r_plane_normal is not normalized.
+static _FORCE_INLINE_ real_t _polygon_get_closest_point(const Polygon &p_polygon, const Vector3 &p_point, Vector3 &r_point, Vector3 &r_plane_normal) {
+	const LocalVector<Vector3> &vertices = p_polygon.vertices;
+	const Vector3 plane_normal = (vertices[1] - vertices[0]).cross(vertices[2] - vertices[0]);
+	r_plane_normal = plane_normal;
+	Vector3 closest_on_polygon;
+	real_t closest = FLT_MAX;
+	bool inside = true;
+	Vector3 previous = vertices[vertices.size() - 1];
+	for (uint32_t point_id = 0; point_id < vertices.size(); ++point_id) {
+		Vector3 edge = vertices[point_id] - previous;
+		Vector3 to_point = p_point - previous;
+		Vector3 edge_to_point_pormal = edge.cross(to_point);
+		bool clockwise = edge_to_point_pormal.dot(plane_normal) > 0;
+		// If we are not clockwise, the point will never be inside the polygon and so the closest point will be on an edge.
+		if (!clockwise) {
+			inside = false;
+			real_t point_projected_on_edge = edge.dot(to_point);
+			real_t edge_square = edge.length_squared();
+
+			if (point_projected_on_edge > edge_square) {
+				real_t distance = vertices[point_id].distance_squared_to(p_point);
+				if (distance < closest) {
+					closest_on_polygon = vertices[point_id];
+					closest = distance;
+				}
+			} else if (point_projected_on_edge < 0.f) {
+				real_t distance = previous.distance_squared_to(p_point);
+				if (distance < closest) {
+					closest_on_polygon = previous;
+					closest = distance;
+				}
+			} else {
+				// If we project on this edge, this will be the closest point.
+				real_t percent = point_projected_on_edge / edge_square;
+				closest_on_polygon = previous + percent * edge;
+				break;
+			}
+		}
+		previous = vertices[point_id];
+	}
+
+	if (inside) {
+		Vector3 plane_normalized = plane_normal.normalized();
+		real_t distance = plane_normalized.dot(p_point - vertices[0]);
+		r_point = p_point - plane_normalized * distance;
+		return distance * distance;
+	}
+
+	r_point = closest_on_polygon;
+	return closest_on_polygon.distance_squared_to(p_point);
+}
+
 ClosestPointQueryResult NavMeshQueries3D::map_iteration_get_closest_point_info(const NavMapIteration3D &p_map_iteration, const Vector3 &p_point) {
 	ClosestPointQueryResult result;
 	real_t closest_point_distance_squared = FLT_MAX;
 
+	// Arena modification: each region's grid gives the polygons near the point, instead of a scan
+	// of all of them. Ties go to the polygon the scan met first: the lowest index, in the first
+	// region. The scan also stopped a region at the first polygon closer than CMP_EPSILON, which
+	// this does not.
 	const LocalVector<Ref<NavRegionIteration3D>> &regions = p_map_iteration.region_iterations;
 	for (const Ref<NavRegionIteration3D> &region : regions) {
-		for (const Polygon &polygon : region->get_navmesh_polygons()) {
-			Vector3 plane_normal = (polygon.vertices[1] - polygon.vertices[0]).cross(polygon.vertices[2] - polygon.vertices[0]);
-			Vector3 closest_on_polygon;
-			real_t closest = FLT_MAX;
-			bool inside = true;
-			Vector3 previous = polygon.vertices[polygon.vertices.size() - 1];
-			for (uint32_t point_id = 0; point_id < polygon.vertices.size(); ++point_id) {
-				Vector3 edge = polygon.vertices[point_id] - previous;
-				Vector3 to_point = p_point - previous;
-				Vector3 edge_to_point_pormal = edge.cross(to_point);
-				bool clockwise = edge_to_point_pormal.dot(plane_normal) > 0;
-				// If we are not clockwise, the point will never be inside the polygon and so the closest point will be on an edge.
-				if (!clockwise) {
-					inside = false;
-					real_t point_projected_on_edge = edge.dot(to_point);
-					real_t edge_square = edge.length_squared();
-
-					if (point_projected_on_edge > edge_square) {
-						real_t distance = polygon.vertices[point_id].distance_squared_to(p_point);
-						if (distance < closest) {
-							closest_on_polygon = polygon.vertices[point_id];
-							closest = distance;
-						}
-					} else if (point_projected_on_edge < 0.f) {
-						real_t distance = previous.distance_squared_to(p_point);
-						if (distance < closest) {
-							closest_on_polygon = previous;
-							closest = distance;
-						}
-					} else {
-						// If we project on this edge, this will be the closest point.
-						real_t percent = point_projected_on_edge / edge_square;
-						closest_on_polygon = previous + percent * edge;
-						break;
-					}
-				}
-				previous = polygon.vertices[point_id];
-			}
-
-			if (inside) {
-				Vector3 plane_normalized = plane_normal.normalized();
-				real_t distance = plane_normalized.dot(p_point - polygon.vertices[0]);
-				real_t distance_squared = distance * distance;
-				if (distance_squared < closest_point_distance_squared) {
-					closest_point_distance_squared = distance_squared;
-					result.point = p_point - plane_normalized * distance;
-					result.normal = plane_normalized;
-					result.owner = polygon.owner->get_self();
-
-					if (Math::is_zero_approx(distance)) {
-						break;
-					}
-				}
-			} else {
-				real_t distance = closest_on_polygon.distance_squared_to(p_point);
-				if (distance < closest_point_distance_squared) {
-					closest_point_distance_squared = distance;
-					result.point = closest_on_polygon;
-					result.normal = plane_normal.normalized();
-					result.owner = polygon.owner->get_self();
-				}
-			}
+		const NavPolygonGrid3D &grid = region->get_polygon_grid();
+		if (grid.is_empty() || NavPolygonGrid3D::is_beyond(NavPolygonGrid3D::aabb_distance_squared(region->get_bounds(), p_point), closest_point_distance_squared)) {
+			continue;
 		}
+
+		const LocalVector<Polygon> &polygons = region->get_navmesh_polygons();
+		bool found_here = false;
+		uint32_t found_index = 0;
+		grid.search(p_point, closest_point_distance_squared, [&](uint32_t p_index) {
+			const Polygon &polygon = polygons[p_index];
+			Vector3 point;
+			Vector3 plane_normal;
+			const real_t distance_squared = _polygon_get_closest_point(polygon, p_point, point, plane_normal);
+			if (distance_squared < closest_point_distance_squared || (found_here && distance_squared == closest_point_distance_squared && p_index < found_index)) {
+				closest_point_distance_squared = distance_squared;
+				result.point = point;
+				result.normal = plane_normal.normalized();
+				result.owner = polygon.owner->get_self();
+				found_here = true;
+				found_index = p_index;
+			}
+		});
 	}
 
 	return result;

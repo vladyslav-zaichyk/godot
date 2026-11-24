@@ -32,6 +32,7 @@
 
 #include "../nav_utils_3d.h"
 #include "nav_base_iteration_3d.h"
+#include "nav_polygon_grid_3d.h"
 
 #include "core/math/aabb.h"
 
@@ -77,14 +78,18 @@ public:
 	real_t surface_area = 0.0;
 	AABB bounds;
 	LocalVector<Nav3D::ConnectableEdge> external_edges;
+	// Arena modification: its polygons by place, for closest point queries.
+	NavPolygonGrid3D polygon_grid;
 
 	const Transform3D &get_transform() const { return transform; }
 	real_t get_surface_area() const { return surface_area; }
 	AABB get_bounds() const { return bounds; }
 	const LocalVector<Nav3D::ConnectableEdge> &get_external_edges() const { return external_edges; }
+	const NavPolygonGrid3D &get_polygon_grid() const { return polygon_grid; }
 
 	virtual ~NavRegionIteration3D() override {
 		external_edges.clear();
+		polygon_grid.clear();
 		navmesh_polygons.clear();
 		internal_connections.clear();
 	}

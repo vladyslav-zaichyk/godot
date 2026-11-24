@@ -143,6 +143,9 @@ void NavRegionBuilder3D::_build_step_process_navmesh_data(NavRegionIterationBuil
 	region_iteration->surface_area = _new_region_surface_area;
 	region_iteration->bounds = _new_region_bounds;
 
+	// Arena modification: a grid over the polygons for closest point queries.
+	region_iteration->polygon_grid.build(navmesh_polygons);
+
 	performance_data.pm_polygon_count = navmesh_polygons.size();
 }
 
